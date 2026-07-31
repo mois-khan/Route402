@@ -1,4 +1,4 @@
-import { paymentMiddlewareFromConfig } from '@x402/express';
+import { paymentMiddlewareFromHTTPServer, x402ResourceServer, x402HTTPResourceServer } from '@x402/express';
 import { HTTPFacilitatorClient } from '@x402/core/http';
 import { ExactAvmScheme } from '@x402/avm/exact/server';
 import { ALGORAND_TESTNET_CAIP2, ALGORAND_MAINNET_CAIP2, USDC_TESTNET_ASA_ID, USDC_MAINNET_ASA_ID } from '@x402/avm';
@@ -19,31 +19,47 @@ const usdcAsaId = network === 'mainnet' ? USDC_MAINNET_ASA_ID : USDC_TESTNET_ASA
 
 export function x402Gate(profile: ProviderProfile) {
   const facilitatorClient = new HTTPFacilitatorClient({ url: process.env.FACILITATOR_URL });
+  const resourceServer = new x402ResourceServer(facilitatorClient).register(networkCaip2, new ExactAvmScheme());
 
-  return paymentMiddlewareFromConfig(
-    {
-      [profile.path]: {
-        accepts: {
-          scheme: 'exact',
-          network: networkCaip2,
-          // Already atomic USDC units (micro-USDC === USDC's 6 decimals) — an
-          // explicit AssetAmount, not a decimal Money string, so no unit
-          // conversion happens between our ledger and the on-chain amount.
-          price: { asset: usdcAsaId, amount: String(profile.advertisedPriceMicroUSDC) },
-          payTo: profile.walletAddress,
-          maxTimeoutSeconds: profile.maxTimeoutSeconds,
-        },
-        resource: profile.path,
-        description: `${profile.name} — ${profile.capabilities[0]}`,
-        mimeType: 'application/json',
+  const httpServer = new x402HTTPResourceServer(resourceServer, {
+    [profile.path]: {
+      accepts: {
+        scheme: 'exact',
+        network: networkCaip2,
+        // Already atomic USDC units (micro-USDC === USDC's 6 decimals) — an
+        // explicit AssetAmount, not a decimal Money string, so no unit
+        // conversion happens between our ledger and the on-chain amount.
+        price: { asset: usdcAsaId, amount: String(profile.advertisedPriceMicroUSDC) },
+        payTo: profile.walletAddress,
+        maxTimeoutSeconds: profile.maxTimeoutSeconds,
       },
+      resource: profile.path,
+      description: `${profile.name} — ${profile.capabilities[0]}`,
+      mimeType: 'application/json',
     },
-    facilitatorClient,
-    [{ network: networkCaip2, server: new ExactAvmScheme() }]
-    // syncFacilitatorOnStart left at its default (true): the resource server
-    // needs the facilitator's supported-kinds response before it can build
-    // any payment requirement at all — there's no working lazy path, so the
-    // router (which hosts the facilitator) has to be reachable by the time
-    // a provider's first request lands, not just by the time it boots.
-  );
+  });
+
+  // `httpServer.initialize()` fetches supported-kinds from the facilitator
+  // before any payment requirement can be built. paymentMiddlewareFromConfig's
+  // own `syncFacilitatorOnStart: true` fires this at module-load time as an
+  // unawaited promise — if the router (which hosts our facilitator) isn't
+  // listening yet, that's an unhandled rejection that crashes the whole
+  // provider process (confirmed live: `npm run dev` starts all 5 services
+  // with no ordering guarantee, so this raced on every other boot). Managing
+  // the retry ourselves, with every rejection caught, means the provider
+  // stays up regardless of boot order — its `/health` and `/_chaos` work
+  // immediately, and the capability route starts working the moment the
+  // router is reachable.
+  void (async function initWithRetry() {
+    for (;;) {
+      try {
+        await httpServer.initialize();
+        return;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  })();
+
+  return paymentMiddlewareFromHTTPServer(httpServer, undefined, undefined, false);
 }
