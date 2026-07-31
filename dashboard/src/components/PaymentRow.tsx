@@ -1,4 +1,4 @@
-import type { PaymentRecord } from '@route402/shared';
+import type { PaymentWithCreatedAt } from '../lib/types.js';
 import { formatMicroUSDC } from '@route402/shared';
 import { paymentStatusLabel, paymentStatusTone } from '../lib/labels.js';
 import { formatMs, formatTime, truncateHash } from '../lib/format.js';
@@ -6,12 +6,13 @@ import { StatusDot } from './StatusDot.js';
 import { Chip } from './Chip.js';
 
 /** DESIGN.md §7 / §8.3 — time · provider · amount · status · settled-in · badges · receipt link. */
-export function PaymentRow({ payment, providerName }: { payment: PaymentRecord; providerName: string }) {
+export function PaymentRow({ payment, providerName }: { payment: PaymentWithCreatedAt; providerName: string }) {
   const receiptTxId = payment.txIds[0];
 
   return (
     <div className="border-line flex flex-wrap items-center gap-4 border-b px-1 py-3 text-sm last:border-b-0">
-      <span className="text-faint w-20 shrink-0 font-mono text-xs">{formatTime(payment.settledAt ?? payment.finalityMs ?? Date.now())}</span>
+      {/* settledAt is real settlement time when paid; createdAt (the row's real insert time, not "now") covers failed/refused attempts, which never get a settledAt. */}
+      <span className="text-faint w-20 shrink-0 font-mono text-xs">{formatTime(payment.settledAt ?? payment.createdAt)}</span>
       <span className="text-ink-2 w-24 shrink-0">{providerName}</span>
       <span className="text-ink w-28 shrink-0 font-mono">{formatMicroUSDC(payment.amountMicroUSDC)}</span>
       <span className="w-32 shrink-0">

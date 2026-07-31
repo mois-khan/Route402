@@ -1,6 +1,6 @@
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import { ExactAvmScheme } from '@x402/avm/exact/client';
-import type { PaymentRequired, SettleResponse } from '@x402/core/types';
+import type { PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import { agentSigner, currentNetworkCaip2 } from './algorand.js';
 
 /**
@@ -13,12 +13,52 @@ import { agentSigner, currentNetworkCaip2 } from './algorand.js';
 
 let httpClientCache: x402HTTPClient | null = null;
 
-function httpClient(): x402HTTPClient {
+export function httpClient(): x402HTTPClient {
   if (!httpClientCache) {
     const client = new x402Client().register(currentNetworkCaip2(), new ExactAvmScheme(agentSigner()));
     httpClientCache = new x402HTTPClient(client);
   }
   return httpClientCache;
+}
+
+export interface QuoteResult {
+  ok: boolean;
+  requirement?: PaymentRequirements;
+  /** The full decoded 402, needed by anything that goes on to call `httpClient().createPaymentPayload()` — never reconstruct a synthetic one from just `requirement`. */
+  paymentRequired?: PaymentRequired;
+  unpaidMs: number;
+  error?: string;
+}
+
+/**
+ * The unpaid half of the handshake only: call once without a payment header,
+ * parse the 402, return the matching "exact" requirement. Shared by
+ * `payAndCall` (normal single-payment path) and `payment/composite.ts`
+ * (Phase 6 — quotes both legs before building one hand-built atomic group;
+ * that flow reads `requirement` for payTo/amount/asset but never calls
+ * `createPaymentPayload`, since it doesn't use @x402/avm's per-provider
+ * payload at all — it submits its own hand-built group directly).
+ */
+export async function quoteProvider(endpoint: string, payload: Record<string, unknown>): Promise<QuoteResult> {
+  const client = httpClient();
+  const unpaidStarted = Date.now();
+  const unpaidRes = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const unpaid = await client.processResponse(unpaidRes);
+  const unpaidMs = Date.now() - unpaidStarted;
+
+  if (unpaid.paymentStatus !== 'payment_required') {
+    return { ok: false, unpaidMs, error: `expected 402, got status ${unpaid.status} (paymentStatus=${unpaid.paymentStatus})` };
+  }
+  const paymentRequired = unpaid.header as PaymentRequired;
+  const requirement = paymentRequired.accepts.find((a) => a.scheme === 'exact' && a.network === currentNetworkCaip2());
+  if (!requirement) {
+    return { ok: false, unpaidMs, error: `provider offered no "exact" payment option on ${currentNetworkCaip2()}` };
+  }
+  return { ok: true, requirement, paymentRequired, unpaidMs };
 }
 
 export interface PaymentOutcome {
@@ -52,28 +92,13 @@ export async function payAndCall(
 ): Promise<PaymentOutcome> {
   const client = httpClient();
 
-  const unpaidStarted = Date.now();
-  const unpaidRes = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const unpaid = await client.processResponse(unpaidRes);
-  const unpaidMs = Date.now() - unpaidStarted;
-
-  if (unpaid.paymentStatus !== 'payment_required') {
-    return {
-      ok: false,
-      unpaidMs,
-      error: `expected 402, got status ${unpaid.status} (paymentStatus=${unpaid.paymentStatus})`,
-    };
+  const quote = await quoteProvider(endpoint, payload);
+  const { unpaidMs } = quote;
+  if (!quote.ok || !quote.requirement || !quote.paymentRequired) {
+    return { ok: false, unpaidMs, error: quote.error };
   }
-  const paymentRequired = unpaid.header as PaymentRequired;
-
-  const requirement = paymentRequired.accepts.find((a) => a.scheme === 'exact' && a.network === currentNetworkCaip2());
-  if (!requirement) {
-    return { ok: false, unpaidMs, error: `provider offered no "exact" payment option on ${currentNetworkCaip2()}` };
-  }
+  const requirement = quote.requirement;
+  const paymentRequired = quote.paymentRequired;
 
   const quoteMicroUSDC = Number(requirement.amount);
   if (maxPriceMicroUSDC !== undefined && quoteMicroUSDC > maxPriceMicroUSDC) {

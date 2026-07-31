@@ -23,10 +23,13 @@ export function createEventsClient(): EventsClient {
     for (const listener of stateListeners) listener(state);
   };
 
+  // Same-origin fallback matches getJSON's default in store.tsx.
+  const apiBase = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.host}`;
+  const wsBase = apiBase.replace(/^http/, 'ws'); // http(s):// -> ws(s)://
+
   const connect = () => {
     if (stopped) return;
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    socket = new WebSocket(`${proto}://${window.location.host}/v1/events`);
+    socket = new WebSocket(`${wsBase}/v1/events`);
 
     socket.addEventListener('open', () => {
       backoffMs = 500;

@@ -12,9 +12,10 @@
  * it in, same discipline as scorer.ts.
  */
 
-/** Capability → the JSON field its result must carry, non-empty, to count as delivered. Extend as new capabilities are added (Phase 6: text.translate). */
+/** Capability → the JSON field its result must carry, non-empty, to count as delivered. */
 const EXPECTED_FIELD: Record<string, string> = {
   'text.summarize': 'summary',
+  'text.translate': 'translation',
 };
 
 export interface DeliveryCheckInput {

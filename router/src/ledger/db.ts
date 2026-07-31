@@ -191,7 +191,9 @@ export function insertCall(call: CallRecord): void {
     });
 }
 
-export function insertPayment(payment: PaymentRecord): void {
+/** Returns the `createdAt` it wrote — callers that broadcast the payment (route.ts) need the same real timestamp the ledger has, not a second `Date.now()` call moments later. */
+export function insertPayment(payment: PaymentRecord): number {
+  const createdAt = Date.now();
   db()
     .prepare(
       `INSERT INTO payments (
@@ -215,8 +217,9 @@ export function insertPayment(payment: PaymentRecord): void {
       finalityMs: payment.finalityMs,
       status: payment.status,
       explorerUrl: payment.explorerUrl,
-      createdAt: Date.now(),
+      createdAt,
     });
+  return createdAt;
 }
 
 interface DecisionRow {
@@ -299,9 +302,13 @@ interface PaymentRow {
   finality_ms: number | null;
   status: PaymentRecord['status'];
   explorer_url: string | null;
+  created_at: number;
 }
 
-function rowToPayment(row: PaymentRow): PaymentRecord {
+/** PaymentRecord plus the additive `createdAt` field — not part of the PRD §8.4 contract, but the dashboard needs a real timestamp for attempts that never settled (settledAt is null for those). */
+export type PaymentWithCreatedAt = PaymentRecord & { createdAt: number };
+
+function rowToPayment(row: PaymentRow): PaymentWithCreatedAt {
   return {
     id: row.id,
     decisionId: row.decision_id,
@@ -315,11 +322,12 @@ function rowToPayment(row: PaymentRow): PaymentRecord {
     finalityMs: row.finality_ms,
     status: row.status,
     explorerUrl: row.explorer_url,
+    createdAt: row.created_at,
   };
 }
 
 /** Newest first. */
-export function getRecentPayments(limit = 50): PaymentRecord[] {
+export function getRecentPayments(limit = 50): PaymentWithCreatedAt[] {
   const rows = db().prepare(`SELECT * FROM payments ORDER BY created_at DESC LIMIT ?`).all(limit) as PaymentRow[];
   return rows.map(rowToPayment);
 }

@@ -1,4 +1,4 @@
-import type { RouteDecision, SavingsSnapshot, Priority } from '@route402/shared';
+import type { RouteDecision, PaymentRecord, SavingsSnapshot, Priority } from '@route402/shared';
 
 /**
  * Additive fields the router's API sends beyond the strict PRD §8 shapes
@@ -7,6 +7,8 @@ import type { RouteDecision, SavingsSnapshot, Priority } from '@route402/shared'
  * boundary.
  */
 export type DecisionWithPriority = RouteDecision & { priority: Priority };
+
+export type PaymentWithCreatedAt = PaymentRecord & { createdAt: number };
 
 export interface StatsSnapshot extends SavingsSnapshot {
   avgSettlementMs: number;
@@ -18,4 +20,10 @@ export interface CallSummary {
   latencyMs: number | null;
   failed: boolean;
   startedAt: number;
+}
+
+/** GET /v1/wallets — Phase 6 (US9), a real algod balance query, not a claimed number. */
+export interface WalletBalances {
+  agent: { address: string; algoMicroAlgos: number } | null;
+  sponsor: { address: string; algoMicroAlgos: number } | null;
 }

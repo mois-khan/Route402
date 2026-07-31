@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ChaosMode } from '@route402/shared';
 import { useStore } from '../lib/store.js';
 import { capabilityLabel, circuitStateLabel, circuitStateTone } from '../lib/labels.js';
-import { truncateAddress } from '../lib/format.js';
+import { truncateAddress, formatMs } from '../lib/format.js';
 import { StatusDot } from '../components/StatusDot.js';
 import { Chip } from '../components/Chip.js';
 import { Sparkline, type SparklinePoint } from '../components/Sparkline.js';
@@ -91,11 +91,11 @@ export function Providers() {
               </div>
               <div>
                 <div className="text-muted text-xs">Typical speed</div>
-                <div className="font-mono">{p.latencyP50Ms}ms</div>
+                <div className="font-mono">{formatMs(p.latencyP50Ms)}</div>
               </div>
               <div>
                 <div className="text-muted text-xs">Slow-day speed</div>
-                <div className="font-mono">{p.latencyP95Ms}ms</div>
+                <div className="font-mono">{formatMs(p.latencyP95Ms)}</div>
               </div>
             </div>
 

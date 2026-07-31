@@ -59,3 +59,27 @@ export function sponsorFacilitatorSigner(): FacilitatorAvmSigner {
   }
   return sponsorSignerCache;
 }
+
+let algodClientCache: algosdk.Algodv2 | null = null;
+/** Shared algod client — Phase 6's composite payment builds its own transaction group directly (payment/composite.ts), unlike the single-payment path which lets @x402/avm's ExactAvmScheme do it. */
+export function algodClient(): algosdk.Algodv2 {
+  if (!config.algod.serverTestnet) throw new Error('ALGOD_SERVER_TESTNET is not set — see .env.example');
+  if (!algodClientCache) algodClientCache = new algosdk.Algodv2(config.algod.token, config.algod.serverTestnet, '');
+  return algodClientCache;
+}
+
+let agentAccountCache: algosdk.Account | null = null;
+/** Raw account for the agent — needed to sign a hand-built group directly (Phase 6 composite), not just via @x402/avm's wrapped ClientAvmSigner. */
+export function agentAccount(): algosdk.Account {
+  if (!config.agentMnemonic) throw new Error('AGENT_MNEMONIC is not set — see .env.example');
+  if (!agentAccountCache) agentAccountCache = algosdk.mnemonicToSecretKey(config.agentMnemonic.trim());
+  return agentAccountCache;
+}
+
+let sponsorAccountCache: algosdk.Account | null = null;
+/** Raw account for the sponsor — signs the fee-payer leg of a hand-built composite group directly. */
+export function sponsorAccount(): algosdk.Account {
+  if (!config.sponsorMnemonic) throw new Error('SPONSOR_MNEMONIC is not set — see .env.example');
+  if (!sponsorAccountCache) sponsorAccountCache = algosdk.mnemonicToSecretKey(config.sponsorMnemonic.trim());
+  return sponsorAccountCache;
+}

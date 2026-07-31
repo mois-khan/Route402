@@ -17,6 +17,10 @@ export function formatPercent(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
+export function formatAlgo(microAlgos: number): string {
+  return `${(microAlgos / 1_000_000).toFixed(3)} ALGO`;
+}
+
 export function truncateAddress(address: string): string {
   if (address.length <= 12) return address;
   return `${address.slice(0, 4)}…${address.slice(-4)}`;

@@ -93,3 +93,56 @@ export function loadProfile(key: string | undefined): ProviderProfile {
   }
   return profile;
 }
+
+/**
+ * Phase 6 (US8) — the second capability that makes a composite request
+ * meaningful. PRD §8.1's `Provider` carries one price/latency per record, so
+ * this isn't a second capability *on* the existing provider record — it's a
+ * second, separately-scoreable registry entry (own id, own economics) that
+ * happens to share the same process, port and wallet. Same spread pattern
+ * as summarize: no single obvious winner.
+ */
+export interface TranslateProfile {
+  id: string;
+  name: string;
+  path: string;
+  advertisedPriceMicroUSDC: number;
+  latencyP50Ms: number;
+  latencyP95Ms: number;
+}
+
+export const TRANSLATE_PROFILES: Record<string, TranslateProfile> = {
+  alpha: {
+    id: 'prov_alpha_translate',
+    name: 'Alpha Translate',
+    path: '/translate',
+    advertisedPriceMicroUSDC: 6_000, // cheap
+    latencyP50Ms: 900, // slow
+    latencyP95Ms: 1_100,
+  },
+  beta: {
+    id: 'prov_beta_translate',
+    name: 'Beta Translate',
+    path: '/translate',
+    advertisedPriceMicroUSDC: 9_000, // mid
+    latencyP50Ms: 500, // mid
+    latencyP95Ms: 650,
+  },
+  gamma: {
+    id: 'prov_gamma_translate',
+    name: 'Gamma Translate',
+    path: '/translate',
+    advertisedPriceMicroUSDC: 15_000, // expensive
+    latencyP50Ms: 180, // fast
+    latencyP95Ms: 230,
+  },
+};
+
+export function loadTranslateProfile(key: string | undefined): TranslateProfile {
+  const profile = key ? TRANSLATE_PROFILES[key] : undefined;
+  if (!profile) {
+    const known = Object.keys(TRANSLATE_PROFILES).join(', ');
+    throw new Error(`Unknown translate profile "${key ?? ''}". Expected one of: ${known}`);
+  }
+  return profile;
+}

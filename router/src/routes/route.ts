@@ -38,8 +38,8 @@ function persist(
     broadcast({ type: 'call', data: call });
   }
   for (const payment of payments) {
-    insertPayment(payment);
-    broadcast({ type: 'payment', data: payment });
+    const createdAt = insertPayment(payment);
+    broadcast({ type: 'payment', data: { ...payment, createdAt } });
   }
   broadcast({ type: 'stats', data: computeStats() });
 }

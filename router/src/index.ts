@@ -6,9 +6,11 @@ import { seedKnownProviders } from './seed.js';
 import { initEvents } from './events.js';
 import { registerFacilitatorRoutes } from './routes/facilitator.js';
 import { registerRouteRoute } from './routes/route.js';
+import { registerCompositeRoute } from './routes/composite.js';
 import { registerProvidersRoutes } from './routes/providers.js';
 import { registerDecisionsRoute } from './routes/decisions.js';
 import { registerStatsRoute } from './routes/stats.js';
+import { registerWalletsRoute } from './routes/wallets.js';
 
 /**
  * Route402 router.
@@ -30,11 +32,25 @@ const app = Fastify({
         },
 });
 
+// Dashboard runs on its own origin once deployed (Railway gives each service its
+// own domain) — no auth/session in this project (PRD §16), so an open CORS policy
+// costs nothing and keeps a second reverse proxy out of scope.
+app.addHook('onRequest', async (_req, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'content-type');
+});
+app.options('/*', async (_req, reply) => {
+  reply.code(204).send();
+});
+
 registerFacilitatorRoutes(app);
 registerRouteRoute(app);
+registerCompositeRoute(app);
 registerProvidersRoutes(app);
 registerDecisionsRoute(app);
 registerStatsRoute(app);
+registerWalletsRoute(app);
 
 app.get('/health', async () => {
   const pending = missingChainConfig();

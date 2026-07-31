@@ -1,4 +1,3 @@
-import type { ProviderProfile } from './profiles.js';
 import type { ChaosMode } from '@route402/shared';
 export { isChaosMode } from '@route402/shared';
 
@@ -10,6 +9,13 @@ export { isChaosMode } from '@route402/shared';
  * loop; the only human action is flipping the switch.
  */
 
+/** The timing a capability advertises — everything `delayMs()` needs to simulate it honestly. */
+export interface CapabilityTiming {
+  latencyP50Ms: number;
+  latencyP95Ms: number;
+  maxTimeoutSeconds: number;
+}
+
 /**
  * Normal-operation latency: uniform ±25% around p50.
  *
@@ -17,8 +23,8 @@ export { isChaosMode } from '@route402/shared';
  * window in Phase 2 meaningless — every percentile would be the same number,
  * and the scorer's latency term would look like a constant.
  */
-export function jitteredLatencyMs(profile: ProviderProfile): number {
-  return Math.round(profile.latencyP50Ms * (0.75 + Math.random() * 0.5));
+export function jitteredLatencyMs(timing: CapabilityTiming): number {
+  return Math.round(timing.latencyP50Ms * (0.75 + Math.random() * 0.5));
 }
 
 /**
@@ -30,8 +36,8 @@ export function jitteredLatencyMs(profile: ProviderProfile): number {
  * on its own the mode would be indistinguishable from a healthy call. The
  * floor is what guarantees every provider genuinely overruns.
  */
-export function slowLatencyMs(profile: ProviderProfile): number {
-  return Math.max(profile.latencyP95Ms * 3, profile.maxTimeoutSeconds * 1_000 + 2_000);
+export function slowLatencyMs(timing: CapabilityTiming): number {
+  return Math.max(timing.latencyP95Ms * 3, timing.maxTimeoutSeconds * 1_000 + 2_000);
 }
 
 /**
@@ -56,11 +62,19 @@ export interface Chaos {
   /** epoch ms the current mode was entered */
   readonly since: number;
   set(next: ChaosMode): void;
-  /** How long this call should take, given the current mode. */
-  delayMs(): number;
+  /** How long this call should take, given the current mode and the calling capability's own declared timing. */
+  delayMs(timing: CapabilityTiming): number;
 }
 
-export function createChaos(profile: ProviderProfile): Chaos {
+/**
+ * One chaos state per process, shared across every capability that process
+ * serves (Phase 6 adds a second) — `offline`/`slow`/`garbage`/`healthy`
+ * model the *process* falling over, not one capability of it. Each call
+ * site passes its own capability's timing in, so a `slow` translate call
+ * and a `slow` summarize call correctly overrun their own declared deadline,
+ * not each other's.
+ */
+export function createChaos(): Chaos {
   let mode: ChaosMode = 'healthy';
   let since = Date.now();
 
@@ -76,10 +90,10 @@ export function createChaos(profile: ProviderProfile): Chaos {
       mode = next;
       since = Date.now();
     },
-    delayMs() {
+    delayMs(timing: CapabilityTiming) {
       // `garbage` keeps normal timing on purpose: junk returned at a plausible
       // speed is harder to catch than junk returned instantly.
-      return mode === 'slow' ? slowLatencyMs(profile) : jitteredLatencyMs(profile);
+      return mode === 'slow' ? slowLatencyMs(timing) : jitteredLatencyMs(timing);
     },
   };
 }

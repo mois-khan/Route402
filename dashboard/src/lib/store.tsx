@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Provider, PaymentRecord, CallRecord, ChaosMode, RouterEvent } from '@route402/shared';
-import type { DecisionWithPriority, StatsSnapshot, CallSummary } from './types.js';
+import type { Provider, CallRecord, ChaosMode, RouterEvent } from '@route402/shared';
+import type { DecisionWithPriority, StatsSnapshot, CallSummary, PaymentWithCreatedAt, WalletBalances } from './types.js';
 import { createEventsClient, type ConnectionState } from './ws.js';
 
 interface Store {
   providers: Provider[];
   decisions: DecisionWithPriority[];
-  payments: PaymentRecord[];
+  payments: PaymentWithCreatedAt[];
   calls: CallSummary[];
   stats: StatsSnapshot | null;
+  wallets: WalletBalances | null;
   connectionState: ConnectionState;
   /** The most recently broadcast decision's id — drives the "Right now" panel. */
   latestDecisionId: string | null;
@@ -31,18 +32,24 @@ const SAMPLE_TEXTS = [
   'A provider that does not deliver a real result is never paid for the attempt.',
 ];
 
-async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+// Same-origin ('') when the dashboard is served from behind the router's own
+// domain (local dev, via vite.config.ts's proxy). Deployed separately, the
+// dashboard needs the router's actual URL — see .env.example.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+
+async function getJSON<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [decisions, setDecisions] = useState<DecisionWithPriority[]>([]);
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [payments, setPayments] = useState<PaymentWithCreatedAt[]>([]);
   const [calls, setCalls] = useState<CallSummary[]>([]);
   const [stats, setStats] = useState<StatsSnapshot | null>(null);
+  const [wallets, setWallets] = useState<WalletBalances | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [latestDecisionId, setLatestDecisionId] = useState<string | null>(null);
   const clientRef = useRef(createEventsClient());
@@ -52,6 +59,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (refreshProvidersTimer.current) clearTimeout(refreshProvidersTimer.current);
     refreshProvidersTimer.current = setTimeout(() => {
       getJSON<Provider[]>('/v1/providers').then(setProviders).catch(() => {});
+      // Sponsor's ALGO balance drains with every settled group's fee — same
+      // debounce window as the provider counters that moved in the same request.
+      getJSON<WalletBalances>('/v1/wallets').then(setWallets).catch(() => {});
     }, PROVIDER_REFRESH_DEBOUNCE_MS);
   };
 
@@ -59,16 +69,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     Promise.all([
       getJSON<Provider[]>('/v1/providers'),
       getJSON<DecisionWithPriority[]>('/v1/decisions?limit=50'),
-      getJSON<PaymentRecord[]>('/v1/payments?limit=50'),
+      getJSON<PaymentWithCreatedAt[]>('/v1/payments?limit=50'),
       getJSON<CallSummary[]>('/v1/calls?limit=500'),
       getJSON<StatsSnapshot>('/v1/stats'),
+      getJSON<WalletBalances>('/v1/wallets'),
     ])
-      .then(([p, d, pay, c, s]) => {
+      .then(([p, d, pay, c, s, w]) => {
         setProviders(p);
         setDecisions(d);
         setPayments(pay);
         setCalls(c);
         setStats(s);
+        setWallets(w);
       })
       .catch(() => {
         // WS connection state already surfaces "router unreachable"; the
@@ -88,8 +100,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break;
         }
         case 'payment': {
-          const payment = event.data as PaymentRecord;
+          const payment = event.data as PaymentWithCreatedAt;
           setPayments((prev) => [payment, ...prev.filter((p) => p.id !== payment.id)].slice(0, MAX_PAYMENTS));
+          if (payment.status === 'settled') refreshProviders(); // sponsor's ALGO balance moved
           break;
         }
         case 'circuit': {
@@ -117,7 +130,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendChaos = async (providerId: string, mode: ChaosMode) => {
-    await fetch(`/v1/providers/${providerId}/chaos`, {
+    await fetch(`${API_BASE}/v1/providers/${providerId}/chaos`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ mode }),
@@ -128,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const sendLoad = async (count: number) => {
     const priorities = ['cost', 'speed', 'balanced'] as const;
     for (let i = 0; i < count; i++) {
-      void fetch('/v1/route', {
+      void fetch(`${API_BASE}/v1/route`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -144,7 +157,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <StoreContext.Provider value={{ providers, decisions, payments, calls, stats, connectionState, latestDecisionId, sendChaos, sendLoad }}>
+    <StoreContext.Provider value={{ providers, decisions, payments, calls, stats, wallets, connectionState, latestDecisionId, sendChaos, sendLoad }}>
       {children}
     </StoreContext.Provider>
   );

@@ -18,4 +18,9 @@ export default defineConfig({
       '/health': { target: 'http://localhost:4000', changeOrigin: true },
     },
   },
+  preview: {
+    // Deployed dashboard is reached through a host Vite doesn't know ahead of time
+    // (Railway's generated domain) — the router side of this is CORS (see router/src/index.ts).
+    allowedHosts: true,
+  },
 });
