@@ -18,8 +18,25 @@ export interface ProviderProfile {
   /** Path the capability is served on, e.g. "/summarize". */
   path: string;
   advertisedPriceMicroUSDC: number;
-  /** Target median latency; Phase 1 adds jitter around this. */
+  /** Target median latency. Every call jitters ±25% around this. */
   latencyP50Ms: number;
+  /**
+   * Declared p95. Consistent with the ±25% jitter band, so the registry's
+   * observed p95 in Phase 2 should land close to it. Chaos `slow` is defined
+   * as a multiple of this.
+   */
+  latencyP95Ms: number;
+  /**
+   * Declared deadline, surfaced in the 402 body (PRD §10.2) and enforced by
+   * the router's guard in Phase 4.
+   *
+   * PRD §10.2's example shows 30s. That is a sane production number and an
+   * unwatchable demo one — a `slow` provider would stall the stage for half a
+   * minute per attempt, three times over during fallback. 4s sits far above
+   * every provider's real p95 (Alpha's is 1700ms) while keeping a failed
+   * attempt short enough to narrate.
+   */
+  maxTimeoutSeconds: number;
   /** Algorand payout address. Empty until Phase 3. */
   walletAddress: string;
 }
@@ -38,6 +55,8 @@ export const PROFILES: Record<string, ProviderProfile> = {
     path: '/summarize',
     advertisedPriceMicroUSDC: 8_000, // cheap
     latencyP50Ms: 1_400, // slow
+    latencyP95Ms: 1_700,
+    maxTimeoutSeconds: 4,
     walletAddress: process.env.PROVIDER_ALPHA_ADDRESS || '',
   },
   beta: {
@@ -48,6 +67,8 @@ export const PROFILES: Record<string, ProviderProfile> = {
     path: '/summarize',
     advertisedPriceMicroUSDC: 12_000, // mid
     latencyP50Ms: 700, // mid
+    latencyP95Ms: 850,
+    maxTimeoutSeconds: 4,
     walletAddress: process.env.PROVIDER_BETA_ADDRESS || '',
   },
   gamma: {
@@ -58,6 +79,8 @@ export const PROFILES: Record<string, ProviderProfile> = {
     path: '/summarize',
     advertisedPriceMicroUSDC: 22_000, // expensive
     latencyP50Ms: 250, // fast
+    latencyP95Ms: 300,
+    maxTimeoutSeconds: 4,
     walletAddress: process.env.PROVIDER_GAMMA_ADDRESS || '',
   },
 };

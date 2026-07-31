@@ -13,11 +13,11 @@
 <script>
 const PROJECT_STATE = {
   updated: "2026-07-31",
-  phase: "Phase 0 complete — scaffold boots clean, starting Phase 1 (Providers)",
+  phase: "Phase 1 complete — 3 providers + chaos modes verified, starting Phase 2 (Registry + Scorer)",
   phases: [
     { id: "P0", name: "Foundation",               est: "1h",   day: 1, status: "done",
       gate: "npm run dev boots router, 3 providers and dashboard; all health checks pass." },
-    { id: "P1", name: "Providers",                est: "1.5h", day: 1, status: "pending",
+    { id: "P1", name: "Providers",                est: "1.5h", day: 1, status: "done",
       gate: "Three providers respond with distinct price/latency profiles; all four chaos modes work." },
     { id: "P2", name: "Registry + Scorer",        est: "2h",   day: 1, status: "pending",
       gate: "Correct provider wins under cost, speed and balanced; every decision explains itself." },
@@ -35,18 +35,19 @@ const PROJECT_STATE = {
       gate: "The four-minute demo runs clean three consecutive times." }
   ],
   nextUp: {
-    phase: "Phase 1 — Providers",
-    why: "The scorer (Phase 2) needs real candidates to score. This phase gives it three providers with genuinely different price/latency economics and working chaos modes — no blockchain yet, plain HTTP with a fake price header.",
+    phase: "Phase 2 — Registry + Scorer",
+    why: "The intelligence layer, and the code judges will ask to see. It needs the three providers from Phase 1 as real candidates: a registry to hold their rolling latency/health state, and a pure scorer to rank them under cost / speed / balanced priorities.",
     tasks: [
-      "providers/src/profiles.ts — Alpha (cheap/slow), Beta (mid/mid), Gamma (expensive/fast)",
-      "text.summarize handler with realistic jitter (±25% around p50), not a fixed sleep",
-      "POST /<capability-path> returns { summary: string }",
-      "chaos.ts — offline | slow | garbage | healthy, garbage must return HTTP 200",
-      "POST /_chaos per provider, proxied via router's POST /v1/providers/:id/chaos",
-      "Verify: curl each provider, get a result; flip each chaos mode, observe the right failure shape"
+      "registry.ts — in-memory provider map, write-through to SQLite, getCandidates(capability), rolling 20-call latency window, cold-start priors",
+      "scorer.ts — pure score(candidates, constraints); eligibility filter keeps rejects with reasons; min-max normalisation with divide-by-zero guard; the 3 weight profiles; recentFailurePenalty",
+      "explain.ts — explainDecision(decision) generated from score deltas, never hand-templated",
+      "breaker.ts — trip at 3 consecutive failures, half-open probe after 30s",
+      "npm run scorer:table + unit tests for the scorer (the only tested module, per PRD §16)",
+      "Verify: cost picks Alpha, speed picks Gamma, balanced picks Beta — every decision explains itself in one sentence"
     ]
   },
   changelog: [
+    { date: "2026-07-31", text: "Phase 1 complete: providers/src/profiles.ts, server.ts and chaos.ts. Three Express instances with distinct price/latency profiles; text.summarize with ±25% jitter; all four chaos modes verified live (healthy ~1.6s within Alpha's band, garbage → 200 with empty summary, offline → 503, slow → ~6.1s past the 4s declared timeout). Router-side chaos proxy (POST /v1/providers/:id/chaos) deferred to Phase 2, once registry.ts has the provider id → endpoint map to proxy through." },
     { date: "2026-07-31", text: "Phase 0 complete: npm workspaces, shared types transcribed from PRD §8, SQLite ledger schema, Fastify router + 3 Express provider stubs + Vite/React/Tailwind dashboard shell all boot under one `npm run dev`. Preflight (`npm run health`) confirms 5/5 services up." },
     { date: "2026-07-31", text: "PRD finalised, implementation plan and agent rules written, project page published." }
   ]

@@ -104,7 +104,7 @@ route402/
 
 **Goal:** three fake services with distinct, believable economics. No blockchain yet.
 
-- [ ] `providers/src/profiles.ts`:
+- [x] `providers/src/profiles.ts`:
 
   | id | name | price (µUSDC) | latency p50 | character |
   |---|---|---|---|---|
@@ -112,19 +112,19 @@ route402/
   | `prov_beta` | Beta Summarize | 12,000 | 700ms | mid, mid |
   | `prov_gamma` | Gamma Summarize | 22,000 | 250ms | expensive, fast |
 
-- [ ] `providers/src/server.ts` — one template, config-injected, three instances on `:4001–:4003`
-- [ ] Implement `text.summarize` with realistic jitter (±25% around p50), not a fixed sleep
-- [ ] `POST /<capability-path>` returns `{ summary: string }`
-- [ ] `GET /health` returns `{ status, capability, priceMicroUSDC }`
-- [ ] `providers/src/chaos.ts` — four modes:
+- [x] `providers/src/server.ts` — one template, config-injected, three instances on `:4001–:4003`
+- [x] Implement `text.summarize` with realistic jitter (±25% around p50), not a fixed sleep
+- [x] `POST /<capability-path>` returns `{ summary: string }`
+- [x] `GET /health` returns `{ status, capability, priceMicroUSDC }`
+- [x] `providers/src/chaos.ts` — four modes:
   - `offline` — connection refused / 503
   - `slow` — 3× declared p95, past the timeout
   - `garbage` — 200 OK with an empty or malformed body (this is what proves the guard)
   - `healthy` — reset
-- [ ] `POST /_chaos` on each provider, proxied by the router's `POST /v1/providers/:id/chaos`
-- [ ] Price header on the response so the router has something to read pre-x402
+- [x] `POST /_chaos` on each provider (router-side proxy at `POST /v1/providers/:id/chaos` deferred to Phase 2, once `registry.ts` has the provider id → endpoint map to proxy through)
+- [x] Price header on the response so the router has something to read pre-x402
 
-**Exit:** `curl` each provider, get a result; flip each chaos mode and observe the correct failure shape.
+**Exit:** `curl` each provider, get a result; flip each chaos mode and observe the correct failure shape. ✅ Verified manually — healthy call ~1.6s within Alpha's jitter band, `garbage` → 200 with empty summary, `offline` → 503, `slow` → ~6.1s past the 4s declared timeout. Beta and Gamma boot with correct distinct profiles.
 
 **Watch for:** `garbage` mode must return HTTP 200. A provider that fails loudly is easy. The interesting case — the one the guard exists for — is a provider that returns success with nothing in it.
 
