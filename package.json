@@ -22,7 +22,9 @@
     "dev:gamma": "tsx watch providers/src/server.ts gamma",
     "dev:dashboard": "npm run dev --workspace dashboard",
     "health": "tsx agent/src/health.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p dashboard/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p dashboard/tsconfig.json --noEmit",
+    "scorer:table": "npm run scorer:table --workspace router",
+    "test": "npm run test --workspace router"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

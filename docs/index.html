@@ -13,13 +13,13 @@
 <script>
 const PROJECT_STATE = {
   updated: "2026-07-31",
-  phase: "Phase 1 complete — 3 providers + chaos modes verified, starting Phase 2 (Registry + Scorer)",
+  phase: "Phase 2 complete — registry, scorer and breaker verified, starting Phase 3 (x402 integration)",
   phases: [
     { id: "P0", name: "Foundation",               est: "1h",   day: 1, status: "done",
       gate: "npm run dev boots router, 3 providers and dashboard; all health checks pass." },
     { id: "P1", name: "Providers",                est: "1.5h", day: 1, status: "done",
       gate: "Three providers respond with distinct price/latency profiles; all four chaos modes work." },
-    { id: "P2", name: "Registry + Scorer",        est: "2h",   day: 1, status: "pending",
+    { id: "P2", name: "Registry + Scorer",        est: "2h",   day: 1, status: "done",
       gate: "Correct provider wins under cost, speed and balanced; every decision explains itself." },
     { id: "P3", name: "x402 integration",         est: "3h",   day: 1, status: "pending", risk: true,
       gate: "One real payment settles on Algorand TestNet and the explorer link resolves." },
@@ -35,19 +35,20 @@ const PROJECT_STATE = {
       gate: "The four-minute demo runs clean three consecutive times." }
   ],
   nextUp: {
-    phase: "Phase 2 — Registry + Scorer",
-    why: "The intelligence layer, and the code judges will ask to see. It needs the three providers from Phase 1 as real candidates: a registry to hold their rolling latency/health state, and a pure scorer to rank them under cost / speed / balanced priorities.",
+    phase: "Phase 3 — x402 integration ⚠ risk phase (3h timebox)",
+    why: "One real payment has to settle on Algorand TestNet before anything else matters. Start with 3a — every [VERIFY] marker gets resolved against live docs before a line of payment code is written; guessing a package name or a field here is the single biggest risk in the whole build.",
     tasks: [
-      "registry.ts — in-memory provider map, write-through to SQLite, getCandidates(capability), rolling 20-call latency window, cold-start priors",
-      "scorer.ts — pure score(candidates, constraints); eligibility filter keeps rejects with reasons; min-max normalisation with divide-by-zero guard; the 3 weight profiles; recentFailurePenalty",
-      "explain.ts — explainDecision(decision) generated from score deltas, never hand-templated",
-      "breaker.ts — trip at 3 consecutive failures, half-open probe after 30s",
-      "npm run scorer:table + unit tests for the scorer (the only tested module, per PRD §16)",
-      "Verify: cost picks Alpha, speed picks Gamma, balanced picks Beta — every decision explains itself in one sentence"
+      "3a (45 min, non-negotiable): verify Algorand x402 package names, 402 accepts[] field names, payment header/encoding, facilitator verify/settle URLs, TestNet USDC ASA id, who submits the txn, TestNet ALGO/USDC dispensers — record each in docs/VERIFY.md with URL + date",
+      "3b: providers/src/x402-gate.ts — real 402 on unpaid request, verify presented payment against the facilitator before serving",
+      "3c: router/src/payment/algorand.ts (algosdk client, ASA transfer, sign, submit, measure finality) and payment/x402.ts (unpaid call → parse 402 → validate quote against maxPriceMicroUSDC → pay → retry)",
+      "Quote-exceeds-advertised is a fraud signal: abort, re-route, record it — do not pay",
+      "Verify: one request end to end settles for real, and the explorer link resolves to a real transaction",
+      "Contingency: if 3a shows the tooling is unusable, build the handshake directly on raw algosdk. If the 3h timebox expires, freeze and ship Phases 4-5 on whatever payment path works — a working simple payment beats a broken sophisticated one."
     ]
   },
   changelog: [
-    { date: "2026-07-31", text: "Phase 1 complete: providers/src/profiles.ts, server.ts and chaos.ts. Three Express instances with distinct price/latency profiles; text.summarize with ±25% jitter; all four chaos modes verified live (healthy ~1.6s within Alpha's band, garbage → 200 with empty summary, offline → 503, slow → ~6.1s past the 4s declared timeout). Router-side chaos proxy (POST /v1/providers/:id/chaos) deferred to Phase 2, once registry.ts has the provider id → endpoint map to proxy through." },
+    { date: "2026-07-31", text: "Phase 2 complete: registry.ts (in-memory provider pool, write-through to SQLite, rolling 20-call latency window, §9.6 cold-start priors), scorer.ts (pure score()/selectWinner(), eligibility filter, min-max normalisation, the 3 weight profiles, recentFailurePenalty), explain.ts (explainDecision(), generated reason strings) and breaker.ts (trip/half-open/recover, one probe at a time). npm run scorer:table confirms cost→Alpha, speed→Gamma, balanced→Beta, plus a circuit-open scenario proving the exclusion-reason wording. 14/14 scorer unit tests pass (npm test) — the only module PRD §16 requires coverage for. registry.ts/breaker.ts sanity-checked manually (cold start, rolling window, breaker state machine, SQLite persistence round-trip)." },
+    { date: "2026-07-31", text: "Phase 1 complete: providers/src/profiles.ts, server.ts and chaos.ts. Three Express instances with distinct price/latency profiles; text.summarize with ±25% jitter; all four chaos modes verified live (healthy ~1.6s within Alpha's band, garbage → 200 with empty summary, offline → 503, slow → ~6.1s past the 4s declared timeout). Router-side chaos proxy (POST /v1/providers/:id/chaos) deferred to Phase 3, once routes/route.ts and routes/providers.ts actually exist — Phase 2 turned out to be routes-free by design (registry/scorer/explain/breaker only, verified via a CLI harness, no HTTP wiring)." },
     { date: "2026-07-31", text: "Phase 0 complete: npm workspaces, shared types transcribed from PRD §8, SQLite ledger schema, Fastify router + 3 Express provider stubs + Vite/React/Tailwind dashboard shell all boot under one `npm run dev`. Preflight (`npm run health`) confirms 5/5 services up." },
     { date: "2026-07-31", text: "PRD finalised, implementation plan and agent rules written, project page published." }
   ]

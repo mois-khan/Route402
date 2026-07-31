@@ -134,22 +134,22 @@ route402/
 
 **Goal:** the intelligence. This is the phase judges will ask to see the code for.
 
-- [ ] `router/src/registry.ts` — in-memory provider map, write-through to SQLite
-  - [ ] `getCandidates(capability)` returns all providers declaring the capability, regardless of eligibility
-  - [ ] Rolling latency window (last 20 calls) → p50 / p95
-  - [ ] Cold-start seeding per PRD §9.6: optimistic prior `successCount = 1, failureCount = 0`
-- [ ] `router/src/scorer.ts` — **pure function**, signature `score(candidates, constraints) → ScoredCandidate[]`
-  - [ ] Eligibility filter first (PRD §9.5), rejected candidates retained with `eligible: false` + `ineligibleReason`
-  - [ ] Min-max normalisation with `max === min → 0` divide-by-zero guard
-  - [ ] Weight profiles: `cost` 0.65/0.10/0.25, `speed` 0.10/0.65/0.25, `balanced` 0.35/0.35/0.30
-  - [ ] `recentFailurePenalty = min(consecutiveFailures * 0.15, 0.45)`
-  - [ ] Lowest composite wins
-- [ ] `router/src/explain.ts` — `explainDecision(decision) → string`. Generated from the score deltas, never hand-templated per call site
-- [ ] `router/src/breaker.ts` — trip at 3 consecutive failures, `half_open` probe after 30s, one probe at a time, success closes / failure re-opens
-- [ ] Test harness: `npm run scorer:table` prints the full score matrix for the three providers under all three priorities
-- [ ] Unit tests for the scorer only (PRD §16 — no other test coverage)
+- [x] `router/src/registry.ts` — in-memory provider map, write-through to SQLite
+  - [x] `getCandidates(capability)` returns all providers declaring the capability, regardless of eligibility
+  - [x] Rolling latency window (last 20 calls) → p50 / p95
+  - [x] Cold-start seeding per PRD §9.6: optimistic prior `successCount = 1, failureCount = 0`
+- [x] `router/src/scorer.ts` — **pure function**, signature `score(candidates, constraints) → ScoredCandidate[]`
+  - [x] Eligibility filter first (PRD §9.5), rejected candidates retained with `eligible: false` + `ineligibleReason`
+  - [x] Min-max normalisation with `max === min → 0` divide-by-zero guard
+  - [x] Weight profiles: `cost` 0.65/0.10/0.25, `speed` 0.10/0.65/0.25, `balanced` 0.35/0.35/0.30
+  - [x] `recentFailurePenalty = min(consecutiveFailures * 0.15, 0.45)`
+  - [x] Lowest composite wins
+- [x] `router/src/explain.ts` — `explainDecision(decision) → string`. Generated from the score deltas, never hand-templated per call site
+- [x] `router/src/breaker.ts` — trip at 3 consecutive failures, `half_open` probe after 30s, one probe at a time, success closes / failure re-opens
+- [x] Test harness: `npm run scorer:table` prints the full score matrix for the three providers under all three priorities
+- [x] Unit tests for the scorer only (PRD §16 — no other test coverage)
 
-**Exit:** under `cost` Alpha wins; under `speed` Gamma wins; under `balanced` Beta wins. Every decision explains itself in one sentence.
+**Exit:** under `cost` Alpha wins; under `speed` Gamma wins; under `balanced` Beta wins. Every decision explains itself in one sentence. ✅ Verified via `npm run scorer:table` — Alpha/Gamma/Beta win their respective priorities, plus a circuit-open scenario proving the exclusion-reason branch. `npm test` — 14/14 scorer unit tests pass. `registry.ts`/`breaker.ts` manually verified (cold start, rolling window, breaker trip/half-open/recover, one-probe-at-a-time, SQLite persistence round-trip) via a throwaway script, since PRD §16 restricts automated coverage to the scorer.
 
 **Watch for:** The scorer must not import the registry, the DB, or anything async. Purity is what makes it demonstrable on stage.
 

@@ -11,6 +11,7 @@ x402-native payment router for AI agents on Algorand. An agent sends one request
 | [docs/PRD.md](docs/PRD.md) | Scope, data models, API contracts, algorithm. **Binding.** |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Execution order and per-phase exit criteria. |
 | [docs/VERIFY.md](docs/VERIFY.md) | Resolved facts about the x402/Algorand tooling. Created in Phase 3. |
+| [docs/DESIGN.md](docs/DESIGN.md) | Dashboard visual system, language, and screens. **Binding for UI.** Revises PRD §12 layout; leaves §8/§10 untouched. |
 | [docs/index.html](docs/index.html) | Project overview + current progress. |
 
 PRD §8 (data models) and §10 (API contracts) are binding. Do not invent alternate field names — if a field seems wrong, say so, don't silently rename it.
