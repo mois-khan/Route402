@@ -37,7 +37,13 @@ CREATE TABLE IF NOT EXISTS decisions (
   selected_provider_id TEXT,                              -- null if nothing eligible
   reason               TEXT    NOT NULL,
   fallback_chain       TEXT    NOT NULL DEFAULT '[]',     -- JSON string[]
-  agent_id             TEXT
+  agent_id             TEXT,
+  -- Additive, not part of the PRD §8.3 RouteDecision contract (same pattern
+  -- as GET /health's chaosMode): the dashboard's weight-profile chip (Phase
+  -- 5, DESIGN.md §4.5) needs to know which priority actually scored this
+  -- decision, or it would default to guessing "Balanced" for every row.
+  priority             TEXT    NOT NULL DEFAULT 'balanced'
+                                CHECK (priority IN ('cost','speed','balanced'))
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON decisions(timestamp DESC);
 

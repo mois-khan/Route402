@@ -5,7 +5,7 @@
   "type": "module",
   "description": "x402-native payment router for AI agents, settling on Algorand",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "workspaces": [
     "shared",

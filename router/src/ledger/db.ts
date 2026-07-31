@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { config } from '../config.js';
-import type { Provider, RouteDecision, ScoredCandidate, CallRecord, PaymentRecord, SavingsSnapshot } from '@route402/shared';
+import type { Provider, RouteDecision, ScoredCandidate, CallRecord, PaymentRecord, SavingsSnapshot, Priority } from '@route402/shared';
 
 /**
  * The ledger. SQLite via better-sqlite3 — synchronous, which removes an entire
@@ -127,11 +127,11 @@ export function loadProviders(): Provider[] {
 }
 
 /** Writes the decision row plus every candidate row (rejected ones included — PRD §9.5, hard rule 6). */
-export function insertDecision(decision: RouteDecision, agentId?: string): void {
+export function insertDecision(decision: RouteDecision, agentId?: string, priority: Priority = 'balanced'): void {
   const d = db();
   const insertDecisionStmt = d.prepare(
-    `INSERT INTO decisions (id, request_id, capability, timestamp, selected_provider_id, reason, fallback_chain, agent_id)
-     VALUES (@id, @requestId, @capability, @timestamp, @selectedProviderId, @reason, @fallbackChain, @agentId)`
+    `INSERT INTO decisions (id, request_id, capability, timestamp, selected_provider_id, reason, fallback_chain, agent_id, priority)
+     VALUES (@id, @requestId, @capability, @timestamp, @selectedProviderId, @reason, @fallbackChain, @agentId, @priority)`
   );
   const insertCandidateStmt = d.prepare(
     `INSERT INTO candidates (
@@ -153,6 +153,7 @@ export function insertDecision(decision: RouteDecision, agentId?: string): void 
       reason: decision.reason,
       fallbackChain: JSON.stringify(decision.fallbackChain),
       agentId: agentId ?? null,
+      priority,
     });
     decision.candidates.forEach((c, rank) => {
       insertCandidateStmt.run({
@@ -226,7 +227,11 @@ interface DecisionRow {
   selected_provider_id: string | null;
   reason: string;
   fallback_chain: string;
+  priority: Priority;
 }
+
+/** RouteDecision plus the additive `priority` field (see schema.sql) — not part of the PRD §8.3 contract, but the dashboard's weight chip needs it. */
+export type DecisionWithPriority = RouteDecision & { priority: Priority };
 
 interface CandidateRow {
   decision_id: string;
@@ -241,7 +246,7 @@ interface CandidateRow {
 }
 
 /** Newest first, each with its full candidate set (rejected candidates included — hard rule 6). */
-export function getRecentDecisions(limit = 50): RouteDecision[] {
+export function getRecentDecisions(limit = 50): DecisionWithPriority[] {
   const d = db();
   const decisionRows = d.prepare(`SELECT * FROM decisions ORDER BY timestamp DESC LIMIT ?`).all(limit) as DecisionRow[];
   if (decisionRows.length === 0) return [];
@@ -277,6 +282,7 @@ export function getRecentDecisions(limit = 50): RouteDecision[] {
     selectedProviderId: r.selected_provider_id ?? '',
     reason: r.reason,
     fallbackChain: JSON.parse(r.fallback_chain) as string[],
+    priority: r.priority,
   }));
 }
 

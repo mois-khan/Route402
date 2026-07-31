@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { RouteRequest, RouteDecision, ScoredCandidate, CallRecord, PaymentRecord } from '@route402/shared';
+import type { RouteRequest, RouteDecision, ScoredCandidate, CallRecord, PaymentRecord, Priority } from '@route402/shared';
 import { registry } from '../registry.js';
 import { score } from '../scorer.js';
 import { explainDecision } from '../explain.js';
@@ -24,9 +24,15 @@ const DEFAULT_TIMEOUT_SECONDS = 30;
  * once, after the decision row that they point to actually exists. Each
  * write is broadcast to WS /v1/events (Phase 5) in the same order.
  */
-function persist(decision: RouteDecision, agentId: string | undefined, calls: CallRecord[], payments: PaymentRecord[]): void {
-  insertDecision(decision, agentId);
-  broadcast({ type: 'decision', data: decision });
+function persist(
+  decision: RouteDecision,
+  agentId: string | undefined,
+  priority: Priority,
+  calls: CallRecord[],
+  payments: PaymentRecord[]
+): void {
+  insertDecision(decision, agentId, priority);
+  broadcast({ type: 'decision', data: { ...decision, priority } });
   for (const call of calls) {
     insertCall(call);
     broadcast({ type: 'call', data: call });
@@ -76,7 +82,7 @@ export function registerRouteRoute(app: FastifyInstance): void {
     };
 
     if (eligible.length === 0) {
-      persist(decision, agentId, [], []);
+      persist(decision, agentId, priority, [], []);
       return respondNoEligible(reply, capability, scored, constraints.maxPriceMicroUSDC);
     }
 
@@ -144,7 +150,7 @@ export function registerRouteRoute(app: FastifyInstance): void {
             explorerUrl: outcome.txId ? explorerUrl(outcome.txId) : null,
           };
           payments.push(payment);
-          persist(decision, agentId, calls, payments);
+          persist(decision, agentId, priority, calls, payments);
 
           return {
             requestId: decision.requestId,
@@ -224,7 +230,7 @@ export function registerRouteRoute(app: FastifyInstance): void {
 
     decision.reason = `All ${attempted.length} attempted provider(s) failed for "${capability}".`;
     decision.fallbackChain = attempted;
-    persist(decision, agentId, calls, payments);
+    persist(decision, agentId, priority, calls, payments);
 
     reply.code(503);
     return {

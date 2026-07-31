@@ -60,13 +60,20 @@ process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 try {
+  console.error('[boot] opening ledger…');
   db(); // fail fast if the ledger cannot be opened
+  console.error('[boot] ledger open, hydrating registry…');
   registry.hydrate();
+  console.error('[boot] registry hydrated, seeding known providers…');
   seedKnownProviders();
+  console.error('[boot] seeded, binding port ' + config.routerPort + '…');
   await app.listen({ port: config.routerPort, host: '0.0.0.0' });
+  console.error('[boot] listening, wiring events…');
   initEvents(app.server);
+  console.error('[boot] done');
   app.log.info(`ledger ready at ${config.dbPath} · network=${config.network} · providers=${registry.getAll().length}`);
 } catch (err) {
+  console.error('[boot] threw:', err);
   app.log.error(err);
   process.exit(1);
 }
