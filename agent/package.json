@@ -1,0 +1,11 @@
+{
+  "name": "@route402/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo client — single-request CLI, load generator, preflight checks",
+  "dependencies": {
+    "@route402/shared": "*",
+    "dotenv": "^17.4.2"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@route402/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Three simulated x402-gated services with distinct price/latency profiles",
+  "dependencies": {
+    "@route402/shared": "*",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5"
+  }
+}

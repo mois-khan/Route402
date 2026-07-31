@@ -1,0 +1,49 @@
+# ── dependencies ─────────────────────────────────────────
+node_modules/
+.npm/
+*.tgz
+
+# ── secrets ──────────────────────────────────────────────
+# Wallet mnemonics and private keys live here and never in git.
+.env
+.env.*
+!.env.example
+
+# ── database ─────────────────────────────────────────────
+# The ledger is regenerated from schema.sql on boot.
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ── build output ─────────────────────────────────────────
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# ── logs ─────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# ── demo artifacts ───────────────────────────────────────
+# Rehearsal recordings and screenshots — large, and regenerable.
+recordings/
+*.mp4
+*.mov
+
+# ── editor / OS ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
+*~
+
+# ── agent tooling ────────────────────────────────────────
+.claude/settings.local.json

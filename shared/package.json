@@ -1,0 +1,11 @@
+{
+  "name": "@route402/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Types and constants shared across router, providers, agent and dashboard",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts"
+}

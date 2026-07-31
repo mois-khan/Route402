@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route402 — Agent Payment Router on Algorand</title>
+<meta name="description" content="Route402 is an x402-native routing and settlement layer that decides which paid provider an AI agent should use, per request, and settles it on Algorand.">
+<!-- ============================================================
+     PROJECT STATE — single source of truth for the progress
+     section. Update this object when a phase's exit criteria
+     are met. See CLAUDE.md → "Progress tracking".
+     ============================================================ -->
+<script>
+const PROJECT_STATE = {
+  updated: "2026-07-31",
+  phase: "Phase 0 complete — scaffold boots clean, starting Phase 1 (Providers)",
+  phases: [
+    { id: "P0", name: "Foundation",               est: "1h",   day: 1, status: "done",
+      gate: "npm run dev boots router, 3 providers and dashboard; all health checks pass." },
+    { id: "P1", name: "Providers",                est: "1.5h", day: 1, status: "pending",
+      gate: "Three providers respond with distinct price/latency profiles; all four chaos modes work." },
+    { id: "P2", name: "Registry + Scorer",        est: "2h",   day: 1, status: "pending",
+      gate: "Correct provider wins under cost, speed and balanced; every decision explains itself." },
+    { id: "P3", name: "x402 integration",         est: "3h",   day: 1, status: "pending", risk: true,
+      gate: "One real payment settles on Algorand TestNet and the explorer link resolves." },
+    { id: "P4", name: "Guard + fallback",         est: "1h",   day: 1, status: "pending",
+      gate: "Provider killed mid-request; request still succeeds elsewhere and the dead provider is not paid." },
+    { id: "P5", name: "Dashboard",                est: "3h",   day: 2, status: "pending",
+      gate: "Twenty requests update every row live over WebSocket, no refresh." },
+    { id: "P6", name: "Algorand differentiators", est: "2h",   day: 2, status: "pending",
+      gate: "Fee abstraction and atomic composite request both demonstrable on demand." },
+    { id: "P7", name: "MainNet + polish",         est: "1.5h", day: 2, status: "pending",
+      gate: "A real MainNet transaction exists and is linkable from the README." },
+    { id: "P8", name: "Demo rehearsal",           est: "1.5h", day: 2, status: "pending",
+      gate: "The four-minute demo runs clean three consecutive times." }
+  ],
+  nextUp: {
+    phase: "Phase 1 — Providers",
+    why: "The scorer (Phase 2) needs real candidates to score. This phase gives it three providers with genuinely different price/latency economics and working chaos modes — no blockchain yet, plain HTTP with a fake price header.",
+    tasks: [
+      "providers/src/profiles.ts — Alpha (cheap/slow), Beta (mid/mid), Gamma (expensive/fast)",
+      "text.summarize handler with realistic jitter (±25% around p50), not a fixed sleep",
+      "POST /<capability-path> returns { summary: string }",
+      "chaos.ts — offline | slow | garbage | healthy, garbage must return HTTP 200",
+      "POST /_chaos per provider, proxied via router's POST /v1/providers/:id/chaos",
+      "Verify: curl each provider, get a result; flip each chaos mode, observe the right failure shape"
+    ]
+  },
+  changelog: [
+    { date: "2026-07-31", text: "Phase 0 complete: npm workspaces, shared types transcribed from PRD §8, SQLite ledger schema, Fastify router + 3 Express provider stubs + Vite/React/Tailwind dashboard shell all boot under one `npm run dev`. Preflight (`npm run health`) confirms 5/5 services up." },
+    { date: "2026-07-31", text: "PRD finalised, implementation plan and agent rules written, project page published." }
+  ]
+};
+</script>
+<style>
+/* ── reset ─────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  color-scheme:dark;
+  --bg:#0a0b0d;
+  --bg-2:#0e1013;
+  --surface:#121418;
+  --surface-2:#171a1f;
+  --line:#22262d;
+  --line-2:#2c313a;
+  --ink:#eceef2;
+  --ink-2:#b6bcc7;
+  --muted:#7d8492;
+  --faint:#565c68;
+  --accent:#6ff3c2;
+  --accent-dim:#2a5a4b;
+  --warn:#f3c96f;
+  --danger:#f38080;
+  --info:#8ab4f8;
+  --r:12px;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
+}
+html{scroll-behavior:smooth;scroll-padding-top:76px;-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+a{color:inherit}
+svg{display:block}
+
+/* ── layout ────────────────────────────────────────────── */
+.wrap{max-width:1140px;margin:0 auto;padding:0 28px}
+section{padding:76px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0}
+
+/* ── icons ─────────────────────────────────────────────── */
+.ico{width:16px;height:16px;stroke:currentColor;stroke-width:1.6;
+     stroke-linecap:round;stroke-linejoin:round;fill:none;flex:none}
+.ico-lg{width:20px;height:20px}
+.ico-sm{width:13px;height:13px}
+
+/* ── nav ───────────────────────────────────────────────── */
+.nav{
+  position:sticky;top:0;z-index:50;
+  background:rgba(10,11,13,.82);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.nav-in{max-width:1140px;margin:0 auto;padding:0 28px;
+  display:flex;align-items:center;gap:28px;height:56px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.02em;font-size:15px}
+.brand .mark{color:var(--accent)}
+.nav-links{display:flex;gap:22px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{
+  color:var(--muted);text-decoration:none;font-size:12.5px;font-weight:500;
+  letter-spacing:.01em;white-space:nowrap;transition:color .15s;
+}
+.nav-links a:hover{color:var(--ink)}
+
+/* ── hero ──────────────────────────────────────────────── */
+.hero{
+  position:relative;padding:92px 0 76px;overflow:hidden;
+  border-bottom:1px solid var(--line);
+}
+.hero::before{
+  content:"";position:absolute;inset:-40% -10% auto -10%;height:620px;
+  background:radial-gradient(58% 52% at 50% 0%,rgba(111,243,194,.10),transparent 68%);
+  pointer-events:none;
+}
+.hero::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:64px 64px;
+  opacity:.34;
+  mask-image:radial-gradient(70% 60% at 50% 30%,#000,transparent 75%);
+  -webkit-mask-image:radial-gradient(70% 60% at 50% 30%,#000,transparent 75%);
+}
+.hero .wrap{position:relative}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);border:1px solid var(--accent-dim);border-radius:999px;
+  padding:5px 13px;background:rgba(111,243,194,.05);
+}
+h1{
+  font-size:clamp(42px,7.4vw,80px);line-height:.98;letter-spacing:-.045em;
+  font-weight:680;margin:26px 0 0;
+}
+h1 .dim{color:var(--faint)}
+.lede{
+  font-size:clamp(17px,2.1vw,21px);line-height:1.55;color:var(--ink-2);
+  max-width:680px;margin-top:24px;font-weight:400;
+}
+.pitch{
+  margin-top:40px;padding:20px 0 20px 24px;border-left:2px solid var(--accent);
+  font-size:clamp(18px,2.4vw,23px);line-height:1.42;letter-spacing:-.02em;
+  color:var(--ink);max-width:720px;font-weight:500;
+}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:44px}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--line-2);border-radius:8px;background:var(--surface);
+  padding:7px 12px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);
+}
+.chip .k{color:var(--faint)}
+
+/* ── section headings ──────────────────────────────────── */
+.shead{display:flex;align-items:baseline;gap:14px;margin-bottom:10px;flex-wrap:wrap}
+.snum{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  color:var(--accent);text-transform:uppercase;
+}
+h2{font-size:clamp(26px,3.6vw,36px);letter-spacing:-.032em;font-weight:640;line-height:1.14}
+.sdek{color:var(--muted);max-width:660px;margin-bottom:40px;font-size:15.5px}
+
+h3{font-size:17px;font-weight:600;letter-spacing:-.015em;margin-bottom:8px}
+h4{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;margin-bottom:14px;
+}
+
+/* ── cards / grids ─────────────────────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.028);
+}
+.card p{color:var(--ink-2);font-size:14.5px}
+.card .ico-head{
+  width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  border:1px solid var(--line-2);background:var(--surface-2);color:var(--accent);
+  margin-bottom:16px;
+}
+.card.accent{border-color:var(--accent-dim);background:linear-gradient(180deg,rgba(111,243,194,.055),transparent 60%),var(--surface)}
+
+/* numbered beat cards */
+.beat{position:relative;padding-top:26px}
+.beat .n{
+  position:absolute;top:24px;right:24px;font-family:var(--mono);
+  font-size:11px;color:var(--faint);letter-spacing:.1em;
+}
+
+/* ── lists ─────────────────────────────────────────────── */
+.list{list-style:none;display:flex;flex-direction:column;gap:11px}
+.list li{display:flex;gap:11px;align-items:flex-start;color:var(--ink-2);font-size:14.5px;line-height:1.5}
+.list li .ico{margin-top:4px;color:var(--accent)}
+.list.muted li .ico{color:var(--faint)}
+.list.danger li .ico{color:var(--danger)}
+
+/* ── tables ────────────────────────────────────────────── */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}
+th{
+  text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--faint);font-weight:500;
+  padding:14px 18px;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+td{padding:14px 18px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td strong{color:var(--ink);font-weight:600}
+td.mono,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+
+/* ── code ──────────────────────────────────────────────── */
+pre{
+  background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:20px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;
+  line-height:1.75;color:var(--ink-2);
+}
+pre .c{color:var(--faint)}
+pre .k{color:var(--accent)}
+code{font-family:var(--mono);font-size:.88em;color:var(--accent);
+  background:rgba(111,243,194,.07);padding:1px 5px;border-radius:4px}
+
+/* ── diagram ───────────────────────────────────────────── */
+.diagram{
+  border:1px solid var(--line);border-radius:var(--r);background:var(--bg-2);
+  padding:14px;overflow-x:auto;
+}
+.diagram svg{min-width:760px;width:100%;height:auto}
+
+/* ── lifecycle steps ───────────────────────────────────── */
+.steps{display:flex;flex-direction:column;gap:0;counter-reset:s}
+.step{
+  display:flex;gap:18px;padding:16px 0;border-bottom:1px solid var(--line);
+}
+.step:last-child{border-bottom:0}
+.step .sn{
+  flex:none;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  border:1px solid var(--line-2);background:var(--surface);
+  font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:1px;
+}
+.step .sb{flex:1;min-width:0}
+.step .st{font-weight:590;font-size:14.5px;margin-bottom:3px;letter-spacing:-.01em}
+.step .sd{color:var(--muted);font-size:14px;line-height:1.55}
+
+/* ── progress ──────────────────────────────────────────── */
+.prog-top{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:24px;flex-wrap:wrap;margin-bottom:18px;
+}
+.prog-num{font-family:var(--mono);font-size:clamp(38px,6vw,54px);line-height:1;
+  letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.prog-num .pct{color:var(--faint);font-size:.5em;margin-left:6px}
+.bar{height:6px;border-radius:999px;background:var(--surface-2);
+  border:1px solid var(--line);overflow:hidden;margin-bottom:36px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent-dim),var(--accent));
+  border-radius:999px;transition:width .5s ease}
+
+.phase{
+  display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:start;
+  padding:15px 18px;border:1px solid var(--line);border-radius:10px;
+  background:var(--surface);margin-bottom:8px;
+}
+.phase.is-active{border-color:var(--accent-dim);
+  background:linear-gradient(90deg,rgba(111,243,194,.05),transparent 40%),var(--surface)}
+.dot{width:9px;height:9px;border-radius:50%;margin-top:8px;flex:none;background:var(--faint)}
+.dot.done{background:var(--accent);box-shadow:0 0 0 3px rgba(111,243,194,.14)}
+.dot.active{background:var(--warn);box-shadow:0 0 0 3px rgba(243,201,111,.14)}
+.dot.blocked{background:var(--danger);box-shadow:0 0 0 3px rgba(243,128,128,.14)}
+.phase-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.phase-id{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.phase-n{font-weight:590;font-size:14.5px;letter-spacing:-.01em}
+.phase-g{color:var(--muted);font-size:13.5px;margin-top:4px;line-height:1.5}
+.phase-m{display:flex;align-items:center;gap:10px;flex:none}
+.tag{
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border-radius:5px;border:1px solid var(--line-2);color:var(--muted);
+  white-space:nowrap;
+}
+.tag.done{color:var(--accent);border-color:var(--accent-dim);background:rgba(111,243,194,.06)}
+.tag.active{color:var(--warn);border-color:#5a4a2a;background:rgba(243,201,111,.06)}
+.tag.risk{color:var(--danger);border-color:#5a2c2c;background:rgba(243,128,128,.06)}
+.est{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap}
+
+/* ── next up ───────────────────────────────────────────── */
+.next{
+  border:1px solid var(--accent-dim);border-radius:var(--r);
+  background:linear-gradient(180deg,rgba(111,243,194,.06),transparent 55%),var(--surface);
+  padding:28px;
+}
+.next-h{display:flex;align-items:center;gap:10px;color:var(--accent);
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.next h3{font-size:clamp(21px,3vw,27px);letter-spacing:-.028em;margin:12px 0 8px;font-weight:640}
+.next .why{color:var(--ink-2);max-width:640px;margin-bottom:24px;font-size:15px}
+.next ul{list-style:none;display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.next li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--ink-2);
+  font-family:var(--mono);line-height:1.5}
+.next li .ico{margin-top:3px;color:var(--accent);opacity:.7}
+
+/* ── changelog ─────────────────────────────────────────── */
+.log{display:flex;flex-direction:column;gap:0;margin-top:36px}
+.log-i{display:flex;gap:16px;padding:13px 0;border-bottom:1px solid var(--line)}
+.log-i:last-child{border-bottom:0}
+.log-d{font-family:var(--mono);font-size:12px;color:var(--faint);flex:none;width:92px;padding-top:1px}
+.log-t{color:var(--ink-2);font-size:14.5px}
+
+/* ── footer ────────────────────────────────────────────── */
+footer{border-top:1px solid var(--line);padding:36px 0 60px;color:var(--faint);font-size:13px}
+.foot-in{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+.foot-links{display:flex;gap:20px}
+.foot-links a{color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:6px}
+.foot-links a:hover{color:var(--ink)}
+
+@media (max-width:640px){
+  section{padding:56px 0}
+  .wrap,.nav-in{padding:0 20px}
+  .phase{grid-template-columns:auto 1fr;gap:12px}
+  .phase-m{grid-column:2;margin-top:6px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ icon sprite ══════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M9 19h5a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5zM3 14l9 5 9-5"/></symbol>
+    <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4.4 3 8.2 7 9 4-.8 7-4.6 7-9V6l-7-3z"/><path d="m9.5 12 2 2 3.5-3.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.6-.9-1.7-1.5-3-1.5-1.7 0-3 1-3 2s1 1.6 3 2 3 1 3 2-1.3 2-3 2c-1.3 0-2.4-.6-3-1.5M12 6.5v11"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 1v2M15 1v2M9 21v2M15 21v2M1 9h2M1 15h2M21 9h2M21 15h2"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-1.5 3.5L16 11H5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M7 21h10M5 8l-3 6h6L5 8zM19 8l-3 6h6l-3-6zM5 8l7-2 7 2"/></symbol>
+  </defs>
+</svg>
+
+<!-- ══════════ nav ══════════ -->
+<nav class="nav">
+  <div class="nav-in">
+    <div class="brand"><svg class="ico ico-lg mark"><use href="#i-route"/></svg>Route402</div>
+    <div class="nav-links">
+      <a href="#why">Why</a>
+      <a href="#what">What</a>
+      <a href="#how">How</a>
+      <a href="#algorand">Algorand</a>
+      <a href="#progress">Progress</a>
+      <a href="#next">Next</a>
+      <a href="#scope">Scope</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════ hero ══════════ -->
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><svg class="ico ico-sm"><use href="#i-flag"/></svg>NexVerse · Algo + AI Hackathon · Track 2</span>
+    <h1>Route402<span class="dim">.</span></h1>
+    <p class="lede">
+      An x402-native routing and settlement layer that sits between an AI agent
+      and a pool of paid services — and decides, per request, who gets the job
+      and who gets paid.
+    </p>
+    <blockquote class="pitch">
+      AI agents can now pay for services on their own.<br>
+      Nobody's telling them which one to pick. Route402 does.
+    </blockquote>
+    <div class="chips">
+      <span class="chip"><span class="k">chain</span> Algorand</span>
+      <span class="chip"><span class="k">protocol</span> x402</span>
+      <span class="chip"><span class="k">asset</span> USDC (ASA)</span>
+      <span class="chip"><span class="k">stack</span> TypeScript · Fastify · algosdk · React</span>
+      <span class="chip"><span class="k">build</span> 2 days · solo</span>
+      <span class="chip"><span class="k">status</span> <span id="chip-status">—</span></span>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════ WHY ══════════ -->
+<section id="why">
+  <div class="wrap">
+    <div class="shead"><span class="snum">01 — Why</span></div>
+    <h2>The switching cost disappeared. Nothing replaced the decision.</h2>
+    <p class="sdek">
+      Three things happened in sequence. The third one is the opening.
+    </p>
+
+    <div class="grid g3">
+      <div class="card beat">
+        <span class="n">01</span>
+        <div class="ico-head"><svg class="ico"><use href="#i-alert"/></svg></div>
+        <h3>Agents can't buy things</h3>
+        <p>
+          Consuming a paid API means a human creates an account, provisions a key,
+          attaches a card, and reconciles an invoice. Workable for one provider.
+          Structurally impossible across twenty. Completely impossible for a provider
+          the agent found thirty seconds ago.
+        </p>
+      </div>
+      <div class="card beat">
+        <span class="n">02</span>
+        <div class="ico-head"><svg class="ico"><use href="#i-zap"/></svg></div>
+        <h3>x402 removed the account</h3>
+        <p>
+          x402 turns HTTP <code>402 Payment Required</code> into a real negotiation.
+          Request a resource, get a price, attach a signed payment, retry. No account,
+          no API key, no invoice. Payment becomes a property of the request.
+        </p>
+      </div>
+      <div class="card beat">
+        <span class="n">03</span>
+        <div class="ico-head"><svg class="ico"><use href="#i-route"/></svg></div>
+        <h3>So who picks the provider?</h3>
+        <p>
+          With switching cost gone, a problem appears that did not exist before:
+          something has to choose a provider per request, in real time, on live price,
+          latency and reliability. Today that choice is a hardcoded URL a human picked
+          at build time.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;border-color:var(--line-2)">
+      <p style="color:var(--ink);font-size:16px;line-height:1.6">
+        A hardwired provider is, at any given moment, <strong>probably not the cheapest,
+        probably not the fastest, and occasionally down</strong> — and the agent has no
+        mechanism to notice or care. Route402 is the missing decision layer.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ WHAT ══════════ -->
+<section id="what">
+  <div class="wrap">
+    <div class="shead"><span class="snum">02 — What</span></div>
+    <h2>One endpoint. The agent never learns who served it.</h2>
+    <p class="sdek">
+      An agent sends a task to Route402. Route402 evaluates every registered provider
+      that can fulfil it, scores them, selects one, settles the x402 payment on Algorand,
+      returns the result, and updates its own model of the pool based on what just happened.
+    </p>
+
+    <div class="grid g2" style="margin-bottom:16px">
+      <div class="card accent">
+        <h4>What the agent sends</h4>
+        <pre><span class="c">POST /v1/route</span>
+{
+  <span class="k">"capability"</span>: "text.summarize",
+  <span class="k">"payload"</span>:    { "text": "…", "maxWords": 60 },
+  <span class="k">"constraints"</span>: {
+    "maxPriceMicroUSDC": 20000,
+    "priority": "balanced"
+  }
+}</pre>
+      </div>
+      <div class="card">
+        <h4>What comes back</h4>
+        <pre>{
+  <span class="k">"result"</span>:  { "summary": "…" },
+  <span class="k">"routing"</span>: {
+    "reason": "Beta selected: 40% cheaper than
+               Gamma at comparable p95 latency.",
+    "candidatesEvaluated": 3
+  },
+  <span class="k">"payment"</span>: {
+    "amountMicroUSDC": 12000,
+    "finalityMs": 2840,
+    "explorerUrl": "https://…/tx/ABC…"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <h4 style="margin-top:44px">The four guarantees</h4>
+    <div class="grid g4">
+      <div class="card">
+        <div class="ico-head"><svg class="ico"><use href="#i-eye"/></svg></div>
+        <h3>Legible</h3>
+        <p>Every decision records all candidates — including the rejected ones and why they were rejected — plus one plain-English sentence explaining the pick.</p>
+      </div>
+      <div class="card">
+        <div class="ico-head"><svg class="ico"><use href="#i-shield"/></svg></div>
+        <h3>Paid on delivery</h3>
+        <p>A guard verifies the provider actually returned something usable before payment counts. It didn't deliver, it doesn't get paid. The refusal is recorded and visible.</p>
+      </div>
+      <div class="card">
+        <div class="ico-head"><svg class="ico"><use href="#i-coin"/></svg></div>
+        <h3>Bounded</h3>
+        <p>The agent sets a hard ceiling. If a provider quotes above its advertised price, the router aborts and re-routes — and logs the discrepancy as a fraud signal.</p>
+      </div>
+      <div class="card">
+        <div class="ico-head"><svg class="ico"><use href="#i-cpu"/></svg></div>
+        <h3>Unattended</h3>
+        <p>Providers fail, circuits trip, traffic reroutes, the pool recovers. No human in the loop at any point — if a person has to intervene, it's a bug.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ HOW ══════════ -->
+<section id="how">
+  <div class="wrap">
+    <div class="shead"><span class="snum">03 — How</span></div>
+    <h2>Six components, one synchronous request.</h2>
+    <p class="sdek">
+      Routing, payment and settlement all complete inside a single HTTP request —
+      which is only possible because Algorand's finality lands in seconds, not blocks.
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 1000 646" role="img" aria-label="Route402 architecture diagram">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0 0 10 5 0 10z" fill="#7d8492"/>
+          </marker>
+          <style>
+            .bx{fill:#171a1f;stroke:#2c313a;stroke-width:1}
+            .bx-a{fill:#12211c;stroke:#2a5a4b;stroke-width:1}
+            .ct{fill:#0e1013;stroke:#22262d;stroke-width:1}
+            .t{fill:#eceef2;font-family:ui-sans-serif,system-ui,sans-serif;font-size:14px;font-weight:600}
+            .ts{fill:#7d8492;font-family:ui-monospace,Menlo,monospace;font-size:10.5px}
+            .tl{fill:#6ff3c2;font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:1.4px}
+            .ln{stroke:#7d8492;stroke-width:1.3;fill:none}
+          </style>
+        </defs>
+
+        <!-- agent -->
+        <rect class="bx" x="330" y="16" width="340" height="58" rx="9"/>
+        <text class="t" x="500" y="41" text-anchor="middle">Agent (client)</text>
+        <text class="ts" x="500" y="59" text-anchor="middle">CLI harness · load generator · holds zero ALGO</text>
+        <path class="ln" d="M500 74 V126" marker-end="url(#ah)"/>
+        <text class="ts" x="512" y="105">POST /v1/route</text>
+
+        <!-- core container -->
+        <rect class="ct" x="56" y="128" width="888" height="282" rx="12"/>
+        <text class="tl" x="80" y="154">ROUTE402 CORE</text>
+
+        <rect class="bx" x="88" y="170" width="250" height="92" rx="9"/>
+        <text class="t" x="108" y="196">Registry</text>
+        <text class="ts" x="108" y="218">provider pool · capabilities</text>
+        <text class="ts" x="108" y="234">rolling p50/p95 · success rate</text>
+        <text class="ts" x="108" y="250">circuit state</text>
+
+        <rect class="bx-a" x="374" y="170" width="250" height="92" rx="9"/>
+        <text class="t" x="394" y="196">Scorer <tspan class="ts">pure fn</tspan></text>
+        <text class="ts" x="394" y="218">price · latency · reliability</text>
+        <text class="ts" x="394" y="234">weight profile · failure penalty</text>
+        <text class="ts" x="394" y="250">lowest composite wins</text>
+
+        <rect class="bx" x="660" y="170" width="252" height="92" rx="9"/>
+        <text class="t" x="680" y="196">Payment Executor</text>
+        <text class="ts" x="680" y="218">x402 handshake</text>
+        <text class="ts" x="680" y="234">atomic group build</text>
+        <text class="ts" x="680" y="250">fee sponsorship · settle</text>
+
+        <rect class="bx" x="88" y="298" width="250" height="82" rx="9"/>
+        <text class="t" x="108" y="324">Guard / Breaker</text>
+        <text class="ts" x="108" y="345">verify delivery · refuse payment</text>
+        <text class="ts" x="108" y="361">trip at 3 fails · half-open probe</text>
+
+        <rect class="bx" x="660" y="298" width="252" height="82" rx="9"/>
+        <text class="t" x="680" y="324">Ledger (SQLite)</text>
+        <text class="ts" x="680" y="345">append-only</text>
+        <text class="ts" x="680" y="361">decisions · calls · payments</text>
+
+        <!-- internal arrows -->
+        <path class="ln" d="M338 216 H368" marker-end="url(#ah)"/>
+        <path class="ln" d="M624 216 H654" marker-end="url(#ah)"/>
+        <path class="ln" d="M700 262 V292" marker-end="url(#ah)"/>
+        <path class="ln" d="M660 339 H344" marker-end="url(#ah)"/>
+        <path class="ln" d="M213 298 V266" marker-end="url(#ah)"/>
+        <text class="ts" x="352" y="333">outcome</text>
+        <text class="ts" x="222" y="285">health update</text>
+
+        <!-- to providers / dashboard -->
+        <path class="ln" d="M280 410 V452" marker-end="url(#ah)"/>
+        <text class="ts" x="292" y="435">x402 + payment</text>
+        <path class="ln" d="M720 410 V452" marker-end="url(#ah)"/>
+        <text class="ts" x="732" y="435">WebSocket events</text>
+
+        <rect class="bx" x="88" y="454" width="386" height="72" rx="9"/>
+        <text class="t" x="108" y="480">Providers A · B · C</text>
+        <text class="ts" x="108" y="501">x402-gated endpoints · distinct price/latency profiles</text>
+
+        <rect class="bx" x="526" y="454" width="386" height="72" rx="9"/>
+        <text class="t" x="546" y="480">Dashboard (React)</text>
+        <text class="ts" x="546" y="501">live decision feed · savings counter · settlements</text>
+
+        <path class="ln" d="M280 526 V568" marker-end="url(#ah)"/>
+
+        <rect class="bx-a" x="88" y="570" width="824" height="62" rx="9"/>
+        <text class="t" x="500" y="596" text-anchor="middle">Algorand + GoPlausible facilitator</text>
+        <text class="ts" x="500" y="616" text-anchor="middle">verification · settlement · sub-3s finality · atomic groups</text>
+      </svg>
+    </div>
+
+    <h4 style="margin-top:56px">Request lifecycle</h4>
+    <div class="steps">
+      <div class="step"><div class="sn">1</div><div class="sb">
+        <div class="st">Filter</div>
+        <div class="sd">Drop candidates that don't declare the capability, are circuit-open, exceed the price ceiling, or are explicitly excluded. Rejected candidates are kept in the record with a reason — they are not discarded.</div>
+      </div></div>
+      <div class="step"><div class="sn">2</div><div class="sb">
+        <div class="st">Score</div>
+        <div class="sd">Normalise price, latency and unreliability across the candidate set, weight by the requested priority, add a recent-failure penalty. Lowest composite wins. Pure arithmetic — no model, no I/O.</div>
+      </div></div>
+      <div class="step"><div class="sn">3</div><div class="sb">
+        <div class="st">Explain</div>
+        <div class="sd">Generate one plain sentence from the score deltas: <em>"Beta selected: 40% cheaper than Gamma at comparable p95 latency."</em> Generated, never hand-templated.</div>
+      </div></div>
+      <div class="step"><div class="sn">4</div><div class="sb">
+        <div class="st">Handshake</div>
+        <div class="sd">Call the provider unpaid, receive the 402 with its terms, and validate the quote against the agent's ceiling. A quote above the advertised price aborts the call and is recorded as a fraud signal.</div>
+      </div></div>
+      <div class="step"><div class="sn">5</div><div class="sb">
+        <div class="st">Settle</div>
+        <div class="sd">Build the USDC ASA transfer, group it with the sponsor's fee transaction, sign, submit, wait for finality, retry the request with the payment attached.</div>
+      </div></div>
+      <div class="step"><div class="sn">6</div><div class="sb">
+        <div class="st">Guard</div>
+        <div class="sd">Verify the response: 2xx, parses, expected field present and non-empty, arrived in time. Any failure marks the payment <code>refused</code>, records it against the provider, and re-routes — up to three attempts.</div>
+      </div></div>
+      <div class="step"><div class="sn">7</div><div class="sb">
+        <div class="st">Learn</div>
+        <div class="sd">Write the outcome to the ledger, update the provider's rolling latency and success rate, trip or heal the circuit breaker, broadcast to the dashboard. The next request is scored against a pool that just changed.</div>
+      </div></div>
+    </div>
+
+    <div class="grid g2" style="margin-top:48px">
+      <div>
+        <h4>The scoring function</h4>
+        <pre><span class="c">// normalised 0..1 across the candidate set</span>
+normPrice   = (price - minPrice) / (maxPrice - minPrice)
+normLatency = (p95   - minP95)   / (maxP95   - minP95)
+reliability = successCount / (successCount + failureCount)
+
+<span class="k">compositeScore</span> =
+    Wp * normPrice
+  + Wl * normLatency
+  + Wr * (1 - reliability)
+  + min(consecutiveFailures * 0.15, 0.45)
+
+<span class="c">// lowest wins. max == min → that term is 0.</span></pre>
+      </div>
+      <div>
+        <h4>Weight profiles</h4>
+        <div class="tw">
+          <table>
+            <thead><tr><th>priority</th><th style="text-align:right">price</th><th style="text-align:right">latency</th><th style="text-align:right">reliability</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">cost</td><td class="num">0.65</td><td class="num">0.10</td><td class="num">0.25</td></tr>
+              <tr><td class="mono">speed</td><td class="num">0.10</td><td class="num">0.65</td><td class="num">0.25</td></tr>
+              <tr><td class="mono">balanced <span style="color:var(--faint)">·default</span></td><td class="num">0.35</td><td class="num">0.35</td><td class="num">0.30</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin-top:14px">
+          Reliability never drops below <span class="mono">0.25</span> in any profile.
+          A cheap provider that doesn't deliver is not cheap. New providers get an
+          optimistic prior so they're sampled rather than starved — explore/exploit,
+          handled explicitly.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ALGORAND ══════════ -->
+<section id="algorand">
+  <div class="wrap">
+    <div class="shead"><span class="snum">04 — Why Algorand</span></div>
+    <h2>Not a chain we picked. A chain the design requires.</h2>
+    <p class="sdek">
+      Two capabilities do real work here, and neither is generic. Remove them and
+      the product changes shape.
+    </p>
+
+    <div class="grid g2">
+      <div class="card accent">
+        <div class="ico-head"><svg class="ico"><use href="#i-layers"/></svg></div>
+        <h3>Atomic groups → composite requests</h3>
+        <p>
+          One agent request may need two providers — summarize, then translate.
+          Both payments go into a single atomic transaction group: both providers
+          are paid and both results return, or nothing settles and nothing is charged.
+          On a chain without this primitive, that needs an escrow contract and
+          multi-block coordination.
+        </p>
+      </div>
+      <div class="card accent">
+        <div class="ico-head"><svg class="ico"><use href="#i-coin"/></svg></div>
+        <h3>Fee abstraction → zero-ALGO agents</h3>
+        <p>
+          The payment is signed by the agent's wallet; a second transaction from the
+          router's sponsor wallet covers fees for the whole group. The agent holds
+          USDC and <strong>zero ALGO</strong>. An agent can transact without ever
+          acquiring the native token — a genuine onboarding unlock, not a workaround.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;border-color:var(--line-2)">
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <svg class="ico ico-lg" style="color:var(--accent);margin-top:3px"><use href="#i-clock"/></svg>
+        <p style="color:var(--ink);font-size:16px;line-height:1.6">
+          And the quiet one: <strong>finality lands inside the HTTP request.</strong>
+          Routing can only be synchronous — decide, pay, fetch, return — because
+          settlement completes in seconds. With probabilistic finality this design
+          doesn't fit in a request at all.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ PROGRESS ══════════ -->
+<section id="progress">
+  <div class="wrap">
+    <div class="shead"><span class="snum">05 — Progress</span></div>
+    <h2>Build status</h2>
+    <p class="sdek">
+      Nine sequential phases across two days. A phase does not start until the
+      previous one runs end to end.
+    </p>
+
+    <div class="prog-top">
+      <div>
+        <h4 style="margin-bottom:8px">Phases complete</h4>
+        <div class="prog-num"><span id="p-done">0</span><span style="color:var(--faint)">/<span id="p-total">9</span></span><span class="pct" id="p-pct">0%</span></div>
+      </div>
+      <div style="text-align:right">
+        <h4 style="margin-bottom:8px">Last updated</h4>
+        <div class="mono" style="color:var(--ink-2);font-size:14px" id="p-updated">—</div>
+      </div>
+    </div>
+    <div class="bar"><i id="p-bar" style="width:0%"></i></div>
+
+    <div id="phase-list"></div>
+
+    <h4 style="margin-top:48px">Changelog</h4>
+    <div class="log" id="changelog"></div>
+  </div>
+</section>
+
+<!-- ══════════ NEXT ══════════ -->
+<section id="next">
+  <div class="wrap">
+    <div class="shead"><span class="snum">06 — Next</span></div>
+    <h2>What to work on now</h2>
+    <p class="sdek">Exactly one phase is in play at a time. This is it.</p>
+
+    <div class="next">
+      <div class="next-h"><svg class="ico ico-sm"><use href="#i-arrow"/></svg>Up next</div>
+      <h3 id="next-phase">—</h3>
+      <p class="why" id="next-why">—</p>
+      <h4>Tasks</h4>
+      <ul id="next-tasks"></ul>
+    </div>
+
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <div class="ico-head" style="color:var(--danger)"><svg class="ico"><use href="#i-alert"/></svg></div>
+        <h3>The phase that decides the build</h3>
+        <p>
+          <strong>Phase 3 (x402 integration) is the risk.</strong> The Algorand x402
+          tooling is fast-moving — package names, spec fields, facilitator endpoints
+          and ASA IDs must all be verified against live docs before a line is written,
+          and the findings recorded in <code>docs/VERIFY.md</code>.
+        </p>
+        <p style="margin-top:12px">
+          Hard timebox: 3 hours. If it overruns, freeze it and ship Phases 4–5 on
+          whatever payment path works. A working simple payment beats a broken
+          sophisticated one.
+        </p>
+      </div>
+      <div class="card">
+        <div class="ico-head"><svg class="ico"><use href="#i-scale"/></svg></div>
+        <h3>Cut order, decided in advance</h3>
+        <p>
+          If Day 2 runs short, <strong>Phase 6 (atomic groups + fee abstraction) and
+          Phase 7 (MainNet) are cut before Phase 8 (rehearsal)</strong>. Phase 7 is
+          formally a stretch goal — it needs a KYC'd exchange account for real
+          ALGO/USDC, which can take a day or two to clear against a 2-day budget.
+        </p>
+        <p style="margin-top:12px">
+          Phases 5 and 8 are the demo. They get protected at the cost of everything else.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SCOPE ══════════ -->
+<section id="scope">
+  <div class="wrap">
+    <div class="shead"><span class="snum">07 — Scope</span></div>
+    <h2>What's in, and what is deliberately not.</h2>
+    <p class="sdek">
+      Two days. The out-list is as binding as the in-list — everything on it is time
+      stolen from the demo.
+    </p>
+
+    <div class="grid g2">
+      <div class="card">
+        <h4 style="color:var(--accent)">Done means all of this is true</h4>
+        <ul class="list">
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>One endpoint returns a result; the agent never learns the provider</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Three providers with distinct price/latency profiles, live</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Every decision lists all candidates, rejects included with reasons</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Every success settles on-chain and the explorer link resolves</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>The price ceiling is never exceeded</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>A provider killed mid-traffic reroutes with no human intervention</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>A failed provider is never paid, and the refusal is visible</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Fee abstraction: the agent wallet holds zero ALGO</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Composite request: two providers, one atomic group</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Savings vs. naive routing, updating live</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>Endpoint live on MainNet</li>
+          <li><svg class="ico ico-sm"><use href="#i-check"/></svg>The demo runs clean three consecutive times</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="color:var(--danger)">Forbidden — building it costs the demo</h4>
+        <ul class="list danger">
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>User accounts, login, sessions, JWT</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Provider onboarding UI</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Any payment method other than x402 / Algorand</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Multi-chain support</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Rate limiting, quotas, API keys for Route402 itself</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Kubernetes, Docker Compose, CI/CD</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Test coverage targets — tests for the scorer only</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Mobile layouts, dark-mode toggles, landing pages</li>
+          <li><svg class="ico ico-sm"><use href="#i-x"/></svg>Real third-party AI provider integrations</li>
+        </ul>
+        <p style="margin-top:20px;color:var(--muted);font-size:14px">
+          Simulated providers with realistic profiles are not a shortcut here — they're
+          the correct choice. The claim is about the <em>routing</em>, and routing is
+          provable without paying OpenAI.
+        </p>
+      </div>
+    </div>
+
+    <h4 style="margin-top:48px">After the hackathon — one slide, not one hour</h4>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Direction</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Real providers</strong></td><td>Swap simulated services for live paid APIs behind the same x402 contract.</td></tr>
+          <tr><td><strong>Portable reputation</strong></td><td>Provider performance history as an on-chain artifact, not router-local state.</td></tr>
+          <tr><td><strong>Price discovery</strong></td><td>Providers bid per request instead of posting fixed prices.</td></tr>
+          <tr><td><strong>Drop-in SDK</strong></td><td><span class="mono">route402.call(capability, payload)</span> replacing a direct API call.</td></tr>
+          <tr><td><strong>Router as a service</strong></td><td>Route402 itself becomes an x402 endpoint charging a routing fee — composable into other agents.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <div>Route402 · NexVerse Algo + AI Hackathon · Algorand Blockchain Club, Aurora University</div>
+    <div class="foot-links">
+      <a href="PRD.md"><svg class="ico ico-sm"><use href="#i-doc"/></svg>PRD</a>
+      <a href="IMPLEMENTATION_PLAN.md"><svg class="ico ico-sm"><use href="#i-doc"/></svg>Plan</a>
+      <a href="../CLAUDE.md"><svg class="ico ico-sm"><use href="#i-doc"/></svg>Agent rules</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  const S = PROJECT_STATE;
+  const LABEL = { done: "done", active: "in progress", pending: "pending", blocked: "blocked" };
+
+  // ── hero status chip ──
+  document.getElementById("chip-status").textContent = S.phase;
+
+  // ── progress numbers ──
+  const done = S.phases.filter(p => p.status === "done").length;
+  const total = S.phases.length;
+  const pct = Math.round((done / total) * 100);
+  document.getElementById("p-done").textContent = done;
+  document.getElementById("p-total").textContent = total;
+  document.getElementById("p-pct").textContent = pct + "%";
+  document.getElementById("p-updated").textContent = S.updated;
+  requestAnimationFrame(() => { document.getElementById("p-bar").style.width = pct + "%"; });
+
+  // ── phase list ──
+  const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
+  const list = document.getElementById("phase-list");
+
+  S.phases.forEach((p, i) => {
+    const prevDone = i === 0 || S.phases[i - 1].status === "done";
+    const isNext = p.status === "pending" && prevDone && done < total;
+
+    const row = el("div", "phase" + (p.status === "active" || isNext ? " is-active" : ""));
+    row.appendChild(el("span", "dot " + p.status));
+
+    const body = el("div");
+    const head = el("div", "phase-h");
+    head.appendChild(el("span", "phase-id", p.id));
+    head.appendChild(el("span", "phase-n", p.name));
+    head.appendChild(el("span", "tag", "day " + p.day));
+    if (p.risk) head.appendChild(el("span", "tag risk", "risk phase"));
+    body.appendChild(head);
+    body.appendChild(el("div", "phase-g", p.gate));
+
+    const meta = el("div", "phase-m");
+    meta.appendChild(el("span", "est", p.est));
+    const st = p.status === "pending" && isNext ? "active" : p.status;
+    meta.appendChild(el("span", "tag " + (st === "pending" ? "" : st), isNext && p.status === "pending" ? "up next" : LABEL[p.status]));
+
+    row.appendChild(body);
+    row.appendChild(meta);
+    list.appendChild(row);
+  });
+
+  // ── changelog ──
+  const log = document.getElementById("changelog");
+  S.changelog.forEach(c => {
+    const i = el("div", "log-i");
+    i.appendChild(el("div", "log-d", c.date));
+    i.appendChild(el("div", "log-t", c.text));
+    log.appendChild(i);
+  });
+
+  // ── next up ──
+  document.getElementById("next-phase").textContent = S.nextUp.phase;
+  document.getElementById("next-why").textContent = S.nextUp.why;
+  const ul = document.getElementById("next-tasks");
+  S.nextUp.tasks.forEach(t => {
+    const li = document.createElement("li");
+    li.innerHTML = '<svg class="ico ico-sm"><use href="#i-arrow"/></svg>';
+    li.appendChild(document.createTextNode(t));
+    ul.appendChild(li);
+  });
+})();
+</script>
+</body>
+</html>

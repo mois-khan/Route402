@@ -1,0 +1,17 @@
+{
+  "name": "@route402/router",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Route402 core — registry, scorer, payment executor, guard, ledger",
+  "dependencies": {
+    "@route402/shared": "*",
+    "better-sqlite3": "^13.0.2",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.11.0",
+    "pino-pretty": "^13.1.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13"
+  }
+}

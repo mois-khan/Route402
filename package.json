@@ -1,0 +1,33 @@
+{
+  "name": "route402",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "x402-native payment router for AI agents, settling on Algorand",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "shared",
+    "router",
+    "providers",
+    "agent",
+    "dashboard"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n router,alpha,beta,gamma,dash -c cyan,green,yellow,magenta,blue \"npm:dev:router\" \"npm:dev:alpha\" \"npm:dev:beta\" \"npm:dev:gamma\" \"npm:dev:dashboard\"",
+    "dev:router": "tsx watch router/src/index.ts",
+    "dev:alpha": "tsx watch providers/src/server.ts alpha",
+    "dev:beta": "tsx watch providers/src/server.ts beta",
+    "dev:gamma": "tsx watch providers/src/server.ts gamma",
+    "dev:dashboard": "npm run dev --workspace dashboard",
+    "health": "tsx agent/src/health.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p dashboard/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "concurrently": "^10.0.4",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3"
+  }
+}
