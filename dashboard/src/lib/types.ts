@@ -11,3 +11,11 @@ export type DecisionWithPriority = RouteDecision & { priority: Priority };
 export interface StatsSnapshot extends SavingsSnapshot {
   avgSettlementMs: number;
 }
+
+/** GET /v1/calls' shape — feeds the per-provider sparklines. */
+export interface CallSummary {
+  providerId: string;
+  latencyMs: number | null;
+  failed: boolean;
+  startedAt: number;
+}

@@ -1,44 +1,58 @@
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { StoreProvider, useStore } from './lib/store.js';
+import { ConnectionPill } from './components/ConnectionPill.js';
+import { Overview } from './pages/Overview.js';
+import { Providers } from './pages/Providers.js';
+import { Payments } from './pages/Payments.js';
+import { HowItWorks } from './pages/HowItWorks.js';
 
-/**
- * Phase 0 shell. Proves the toolchain works and the proxy to the router is
- * wired — nothing more. The real dashboard (PRD §12) is Phase 5; design is
- * deliberately deferred, so resist styling this.
- */
+/** DESIGN.md §5 — top bar, 56px, sticky, hairline bottom border. Text links only. */
+function Nav() {
+  const { connectionState } = useStore();
+  const linkClass = ({ isActive }: { isActive: boolean }) => `text-sm transition-colors ${isActive ? 'text-ink font-medium' : 'text-ink-2 hover:text-ink'}`;
 
-interface RouterHealth {
-  status: string;
-  network: string;
-  ledger: Record<string, number>;
-  chainConfigMissing: string[];
+  return (
+    <nav className="border-line bg-bg/90 sticky top-0 z-10 border-b backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-8 px-8">
+        <span className="text-ink text-base font-semibold tracking-tight">Route402</span>
+        <div className="flex items-center gap-6">
+          <NavLink to="/" end className={linkClass}>
+            Overview
+          </NavLink>
+          <NavLink to="/providers" className={linkClass}>
+            Providers
+          </NavLink>
+          <NavLink to="/payments" className={linkClass}>
+            Payments
+          </NavLink>
+          <NavLink to="/how" className={linkClass}>
+            How it works
+          </NavLink>
+        </div>
+        <div className="ml-auto">
+          <ConnectionPill state={connectionState} />
+        </div>
+      </div>
+    </nav>
+  );
 }
 
 export function App() {
-  const [health, setHealth] = useState<RouterHealth | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/health')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setHealth)
-      .catch((e: Error) => setError(e.message));
-  }, []);
-
   return (
-    <main className="min-h-screen bg-neutral-950 p-10 font-mono text-sm text-neutral-300">
-      <h1 className="mb-1 text-lg font-semibold text-neutral-100">Route402</h1>
-      <p className="mb-8 text-neutral-500">Phase 0 — scaffold. Dashboard is Phase 5.</p>
-
-      <div className="max-w-xl rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-        <div className="mb-3 text-xs tracking-widest text-neutral-500 uppercase">Router</div>
-        {error && <div className="text-red-400">unreachable — {error}</div>}
-        {!error && !health && <div className="text-neutral-500">checking…</div>}
-        {health && (
-          <pre className="overflow-x-auto whitespace-pre-wrap text-neutral-300">
-            {JSON.stringify(health, null, 2)}
-          </pre>
-        )}
-      </div>
-    </main>
+    <BrowserRouter>
+      <StoreProvider>
+        <div className="min-h-screen">
+          <Nav />
+          <main className="mx-auto max-w-[1400px] px-8 py-6">
+            <Routes>
+              <Route path="/" element={<Overview />} />
+              <Route path="/providers" element={<Providers />} />
+              <Route path="/payments" element={<Payments />} />
+              <Route path="/how" element={<HowItWorks />} />
+            </Routes>
+          </main>
+        </div>
+      </StoreProvider>
+    </BrowserRouter>
   );
 }

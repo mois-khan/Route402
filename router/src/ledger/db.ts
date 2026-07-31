@@ -324,6 +324,26 @@ export function getRecentPayments(limit = 50): PaymentRecord[] {
   return rows.map(rowToPayment);
 }
 
+interface CallSelectRow {
+  provider_id: string;
+  latency_ms: number | null;
+  outcome: CallRecord['outcome'];
+  started_at: number;
+}
+
+/** Newest first, capped — feeds the dashboard's per-provider sparklines (DESIGN.md §9.1). */
+export function getRecentCalls(limit = 500): { providerId: string; latencyMs: number | null; failed: boolean; startedAt: number }[] {
+  const rows = db().prepare(`SELECT provider_id, latency_ms, outcome, started_at FROM calls ORDER BY started_at DESC LIMIT ?`).all(
+    limit
+  ) as CallSelectRow[];
+  return rows.map((r) => ({
+    providerId: r.provider_id,
+    latencyMs: r.latency_ms,
+    failed: r.outcome !== 'success',
+    startedAt: r.started_at,
+  }));
+}
+
 /** PRD §8.6, plus `avgSettlementMs` for the dashboard's "settles in" tile (not part of the binding SavingsSnapshot shape, additive like GET /health's chaosMode). */
 export interface StatsSnapshot extends SavingsSnapshot {
   avgSettlementMs: number;
