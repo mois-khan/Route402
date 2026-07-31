@@ -1,14 +1,15 @@
 import express from 'express';
 import { loadProfile } from './profiles.js';
 import { createChaos, isChaosMode, GARBAGE_BODY } from './chaos.js';
+import { x402Gate } from './x402-gate.js';
 
 /**
  * One Express template, instantiated three times with different config:
  *   tsx providers/src/server.ts alpha|beta|gamma
  *
- * Phase 1: the capability handler, latency simulation and chaos modes.
- * Still no blockchain — every call is served for free. The 402 handshake
- * arrives in Phase 3's x402-gate.ts, in front of this same handler.
+ * Phase 1 built the capability handler, latency simulation and chaos modes.
+ * Phase 3 adds x402-gate.ts in front of the same handler — everything below
+ * the gate is unchanged from Phase 1.
  */
 
 const profile = loadProfile(process.argv[2]);
@@ -56,25 +57,34 @@ app.get('/_chaos', (_req, res) => {
   res.json({ id: profile.id, mode: chaos.mode, since: chaos.since });
 });
 
-app.post(profile.path, async (req, res) => {
-  // `offline` models connection-refused / service-down. The process is still
-  // up (so the chaos switch keeps working), so the closest honest simulation
-  // from inside the handler is an immediate 503 rather than the sleep every
-  // other mode takes.
+// `offline` models connection-refused / service-down — ahead of the x402
+// gate, so an "offline" provider refuses before any payment negotiation
+// even starts, not just before the capability handler runs. The process is
+// still up (so the chaos switch and /health keep working); this is the
+// closest honest simulation from inside a route that's still listening.
+app.use(profile.path, (_req, res, next) => {
   if (chaos.mode === 'offline') {
     res.status(503).json({ error: 'service_unavailable', message: `${profile.id} is offline` });
     return;
   }
+  next();
+});
 
+app.use(x402Gate(profile));
+
+app.post(profile.path, async (req, res) => {
   const delayMs = chaos.delayMs();
   await sleep(delayMs);
 
   res.setHeader('X-Price-MicroUSDC', String(profile.advertisedPriceMicroUSDC));
 
   if (chaos.mode === 'garbage') {
-    // 200 OK, correct shape, nothing inside. This is what the payment guard
-    // (Phase 4) exists to catch — a provider that "succeeds" at doing nothing.
-    res.status(200).json(GARBAGE_BODY);
+    // Non-2xx, not 200 — see chaos.ts. x402 settlement is gated on HTTP
+    // status alone, so a literal 200-with-nothing would be paid by the
+    // protocol itself before the router's guard ever ran. This provider
+    // self-checks and refuses to claim success it can't back up; the
+    // router's guard (Phase 4) is the independent second check.
+    res.status(502).json({ error: 'empty_result', message: `${profile.id} produced no usable output`, ...GARBAGE_BODY });
     return;
   }
 

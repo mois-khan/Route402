@@ -1,6 +1,7 @@
 import type { Provider } from '@route402/shared';
 import { loadProviders, upsertProvider } from './ledger/db.js';
 import { onSuccess, onFailure, withCooldown } from './breaker.js';
+import { broadcast } from './events.js';
 
 /** PRD §9.6 cold-start default for a provider that declares no latency of its own. */
 const DEFAULT_COLD_START_P50_MS = 1000;
@@ -95,6 +96,7 @@ export class Registry {
     const updated = { ...p, ...next };
     this.providers.set(p.id, updated);
     upsertProvider(updated);
+    broadcast({ type: 'circuit', data: { providerId: updated.id, circuitState: updated.circuitState } });
     return updated;
   }
 
@@ -125,6 +127,9 @@ export class Registry {
     const updated = update(current);
     this.providers.set(id, updated);
     upsertProvider(updated);
+    if (updated.circuitState !== current.circuitState) {
+      broadcast({ type: 'circuit', data: { providerId: updated.id, circuitState: updated.circuitState } });
+    }
     return updated;
   }
 

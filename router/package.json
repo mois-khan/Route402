@@ -6,17 +6,24 @@
   "description": "Route402 core — registry, scorer, payment executor, guard, ledger",
   "scripts": {
     "test": "vitest run",
-    "scorer:table": "tsx src/scorerTable.ts"
+    "scorer:table": "tsx src/scorerTable.ts",
+    "preflight": "tsx src/preflight.ts"
   },
   "dependencies": {
+    "@algorandfoundation/algokit-utils": "^10.0.0-alpha.46",
     "@route402/shared": "*",
+    "@x402/avm": "^2.20.0",
+    "@x402/core": "^2.20.0",
+    "algosdk": "^3.6.0",
     "better-sqlite3": "^13.0.2",
     "dotenv": "^17.4.2",
     "fastify": "^5.11.0",
-    "pino-pretty": "^13.1.2"
+    "pino-pretty": "^13.1.2",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/ws": "^8.18.1",
     "vitest": "^3.2.4"
   }
 }

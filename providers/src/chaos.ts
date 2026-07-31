@@ -1,4 +1,6 @@
 import type { ProviderProfile } from './profiles.js';
+import type { ChaosMode } from '@route402/shared';
+export { isChaosMode } from '@route402/shared';
 
 /**
  * Provider failure simulation.
@@ -7,14 +9,6 @@ import type { ProviderProfile } from './profiles.js';
  * routing decision. The router must react to all four without a human in the
  * loop; the only human action is flipping the switch.
  */
-
-export type ChaosMode = 'healthy' | 'offline' | 'slow' | 'garbage';
-
-export const CHAOS_MODES: readonly ChaosMode[] = ['healthy', 'offline', 'slow', 'garbage'] as const;
-
-export function isChaosMode(v: unknown): v is ChaosMode {
-  return typeof v === 'string' && (CHAOS_MODES as readonly string[]).includes(v);
-}
 
 /**
  * Normal-operation latency: uniform ±25% around p50.
@@ -41,11 +35,19 @@ export function slowLatencyMs(profile: ProviderProfile): number {
 }
 
 /**
- * The `garbage` payload: HTTP 200, correct shape, no content.
+ * The `garbage` payload: correct shape, no content.
  *
  * A provider that fails loudly is easy to route around. This is the case the
- * guard exists for — a success status carrying nothing, which a router that
- * only checks `res.ok` would happily pay for.
+ * guard exists for — a response carrying nothing.
+ *
+ * Phase 3 finding (docs/VERIFY.md): x402 settlement is gated by the
+ * middleware purely on HTTP status — `res.statusCode >= 400` cancels
+ * payment, anything else settles, regardless of body content. A literal
+ * `200 { summary: '' }` would therefore get paid automatically by the
+ * protocol itself, before Route402's own guard ever saw it. `server.ts`
+ * serves this with a non-2xx status so the on-chain settlement is refused
+ * at the source — the router's guard (Phase 4) is the second, independent
+ * line of defense for a provider that doesn't self-check this honestly.
  */
 export const GARBAGE_BODY = { summary: '' } as const;
 

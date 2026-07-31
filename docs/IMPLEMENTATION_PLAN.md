@@ -161,31 +161,33 @@ route402/
 
 **Timebox: 3 hours. Hard stop.**
 
+**Status (2026-08-01): code complete, exit criterion pending.** Wallets are unfunded — TestNet ALGO/USDC funding needs a human at the dispenser (reCAPTCHA), in progress. Everything short of the actual chain settlement has been verified live: a real `curl` against a provider returns a genuine `PAYMENT-REQUIRED` header decoding to the correct network/ASA/price/payTo/feePayer; `POST /v1/route` runs the full pipeline and fails at exactly the expected point (`invalid_exact_avm_simulation_failed` — empty wallets), not a code bug. `npm run preflight` is ready to opt every wallet into the USDC asset the moment funding lands. Architecture decision recorded in `docs/VERIFY.md`: Route402 hosts its own x402 facilitator in-process (using the SPONSOR wallet as signer) rather than calling GoPlausible's hosted one, so "the router's sponsor wallet covers fees" is literally true, not just claimed.
+
 ### 3a — Verify before writing code (45 min, non-negotiable)
 
 Every `[VERIFY]` marker in the PRD resolves here. Record findings in `docs/VERIFY.md` with the URL and date checked.
 
-- [ ] Exact npm package names + versions for Algorand x402 (GoPlausible / Coinbase x402 spec)
-- [ ] Exact `accepts[]` field names in the 402 response body — do not guess from PRD §10.2
-- [ ] Payment header name and payload encoding
-- [ ] Facilitator verify/settle endpoint URLs for TestNet
-- [ ] USDC ASA ID for TestNet **and** MainNet
-- [ ] Whether the facilitator or the router submits the transaction
-- [ ] TestNet dispenser for ALGO; source for TestNet USDC
+- [x] Exact npm package names + versions for Algorand x402 (GoPlausible / Coinbase x402 spec) — `@x402/core`, `@x402/avm`, `@x402/express`, `@x402/extensions`, all real and on npm
+- [x] Exact `accepts[]` field names in the 402 response body — do not guess from PRD §10.2 — confirmed against shipped `.d.mts`/compiled source, PRD's example was V1-only and is not what this SDK negotiates by default
+- [x] Payment header name and payload encoding — `X-PAYMENT` request / `X-PAYMENT-RESPONSE` response, base64 JSON
+- [x] Facilitator verify/settle endpoint URLs for TestNet — moot: self-hosted, see architecture decision
+- [x] USDC ASA ID for TestNet **and** MainNet — 10458941 / 31566704, sourced from the package's own constants, not hand-typed
+- [x] Whether the facilitator or the router submits the transaction — the facilitator (confirmed from source); Route402 *is* the facilitator now
+- [x] TestNet dispenser for ALGO; source for TestNet USDC — dispenser.testnet.aws.algodev.network; USDC source still needs eyeballing once at the dispenser (docs/VERIFY.md #14)
 
 ### 3b — Provider side
 
-- [ ] `providers/src/x402-gate.ts` — unpaid request returns real 402 with the verified body shape
-- [ ] Verify presented payment against the facilitator; on success serve the result
+- [x] `providers/src/x402-gate.ts` — unpaid request returns real 402 with the verified body shape (confirmed live via curl)
+- [x] Verify presented payment against the facilitator; on success serve the result
 
 ### 3c — Router side
 
-- [ ] `router/src/payment/algorand.ts` — algosdk client, USDC ASA transfer construction, sign, submit, wait for confirmation, measure finality ms
-- [ ] `router/src/payment/x402.ts` — call unpaid → parse 402 → **validate quote against `maxPriceMicroUSDC`** → build payment → retry with header
-- [ ] Quote-exceeds-advertised is a fraud signal: abort, re-route, record it. Do not pay
-- [ ] Write `PaymentRecord` with `txIds`, `finalityMs`, `explorerUrl`
+- [x] `router/src/payment/algorand.ts` — signer/network/ASA/explorer wiring around `@x402/avm`'s `ExactAvmScheme`, which does the actual txn construction, signing, submission and confirmation-wait
+- [x] `router/src/payment/x402.ts` — call unpaid → parse 402 → **validate quote against `maxPriceMicroUSDC`** → build payment → retry with header
+- [x] Quote-exceeds-advertised is a fraud signal: abort, re-route, record it. Do not pay
+- [x] Write `PaymentRecord` with `txIds`, `finalityMs`, `explorerUrl`
 
-**Exit:** one request end to end, real settlement, explorer link opens a real transaction.
+**Exit:** one request end to end, real settlement, explorer link opens a real transaction. **Not yet met** — blocked on wallet funding, not on code. Verify once `npm run preflight` shows all 5 wallets funded and opted in.
 
 **Contingency (read this before starting):** if 3a reveals the tooling is unusable or undocumented, implement the 402 handshake directly against raw `algosdk` — the spec is public and the transaction is an ordinary ASA transfer. If Phase 3 is not done when the timebox expires, **freeze it, ship Phases 4–5 on whatever payment path works, and return only if Day 2 has slack.** A working simple payment beats a broken sophisticated one. Atomic grouping is Phase 6 and is cuttable.
 
@@ -195,16 +197,18 @@ Every `[VERIFY]` marker in the PRD resolves here. Record findings in `docs/VERIF
 
 **Goal:** a provider that does not deliver is not paid.
 
-- [ ] `router/src/payment/guard.ts` — verify before settlement counts as valid (PRD §11.3):
-  - [ ] HTTP status 2xx
-  - [ ] Body parses as JSON
-  - [ ] Expected capability output field present and non-empty
-  - [ ] Arrived within declared `maxTimeoutSeconds`
-- [ ] Any check fails → `PaymentRecord.status = 'refused'`, failure recorded against provider, request re-routed
-- [ ] Fallback loop: next-best eligible candidate, **max 3 attempts**, every attempt appended to `fallbackChain`
-- [ ] Error responses: 402 `no_affordable_provider`, 503 `no_provider_available`, with the exact bodies from PRD §10.1
+**Status (2026-08-01): code complete, exit criterion pending the same funding blocker as Phase 3.** Structurally verified live: with Beta forced `offline` and Alpha/Gamma still unfunded, `POST /v1/route` correctly walked all 3 candidates in cost order, recorded a `call` + `payment` row for each, and returned the exact PRD §10.1 503 body (`{"error":"no_provider_available","attempted":["prov_alpha","prov_beta","prov_gamma"]}`). Fixed a real bug found in the process: `calls`/`payments` foreign-key to `decisions.id`, but a decision isn't final until the fallback loop ends — rows are now collected in memory and persisted together once the decision is written, not incrementally. Also found and fixed a deeper issue while building the guard: x402 settlement is gated by the middleware purely on HTTP status (`>=400` cancels, anything else pays) — a literal `200 { summary: '' }` would have been paid automatically by the protocol itself, before Route402's own guard ever ran. `providers/src/server.ts`'s `garbage` chaos mode now returns a non-2xx so that's refused at the source; the router-side guard is the independent second check for whatever a provider's own status code doesn't catch (bad JSON, missing/empty field, timeout).
 
-**Exit:** set Beta to `garbage` mid-request; the request still returns a good result via another provider, and Beta's earnings do not increase.
+- [x] `router/src/payment/guard.ts` — verify before settlement counts as valid (PRD §11.3):
+  - [x] HTTP status 2xx
+  - [x] Body parses as JSON
+  - [x] Expected capability output field present and non-empty
+  - [x] Arrived within declared `maxTimeoutSeconds` (client-side `AbortController`, bounded by the provider's own quoted deadline from its 402)
+- [x] Any check fails → `PaymentRecord.status = 'refused'`, failure recorded against provider, request re-routed
+- [x] Fallback loop: next-best eligible candidate, **max 3 attempts**, every attempt appended to `fallbackChain`
+- [x] Error responses: 402 `no_affordable_provider`, 503 `no_provider_available`, with the exact bodies from PRD §10.1
+
+**Exit:** set Beta to `garbage` mid-request; the request still returns a good result via another provider, and Beta's earnings do not increase. **Not yet met** — needs a real successful settlement through the fallback path, same funding blocker as Phase 3. Offline-mode reroute is confirmed; garbage-mode non-payment and a genuine "succeeds via another provider" still need funded wallets to prove end to end.
 
 ---
 

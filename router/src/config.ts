@@ -4,10 +4,10 @@ import type { Network } from '@route402/shared';
 /**
  * Environment access, in one place.
  *
- * Phase 3 values (wallets, facilitator, ASA id) are read but not required —
- * the system must boot and run Phases 0-2 with an empty .env. Anything that
- * genuinely cannot work without a key fails at the point of use, loudly,
- * not at import time.
+ * Phase 3 values (wallets, facilitator, node access) are read but not
+ * required — the system must boot and run Phases 0-2 with an empty .env.
+ * Anything that genuinely cannot work without a key fails at the point of
+ * use, loudly, not at import time.
  */
 
 const num = (v: string | undefined, fallback: number): number => {
@@ -23,24 +23,28 @@ export const config = {
 
   // Phase 3 — see docs/VERIFY.md. Empty until verified.
   algod: {
-    server: process.env.ALGOD_SERVER || '',
-    port: process.env.ALGOD_PORT || '',
+    serverTestnet: process.env.ALGOD_SERVER_TESTNET || '',
     token: process.env.ALGOD_TOKEN || '',
+    indexerServerTestnet: process.env.INDEXER_SERVER_TESTNET || '',
+    indexerToken: process.env.INDEXER_TOKEN || '',
   },
+
+  // Route402 hosts its own facilitator in-process (docs/VERIFY.md
+  // "Architecture decision"). This is where providers are told to call it.
   facilitatorUrl: process.env.FACILITATOR_URL || '',
-  usdcAsaId: process.env.USDC_ASA_ID || '',
   explorerTxTemplate: process.env.EXPLORER_TX_TEMPLATE || '',
 
   agentMnemonic: process.env.AGENT_MNEMONIC || '',
+  agentAddress: process.env.AGENT_ADDRESS || '',
   sponsorMnemonic: process.env.SPONSOR_MNEMONIC || '',
+  sponsorAddress: process.env.SPONSOR_ADDRESS || '',
 } as const;
 
 /** Which Phase 3 settings are still missing. Surfaced by GET /health. */
 export function missingChainConfig(): string[] {
   const required: Record<string, string> = {
-    ALGOD_SERVER: config.algod.server,
+    ALGOD_SERVER_TESTNET: config.algod.serverTestnet,
     FACILITATOR_URL: config.facilitatorUrl,
-    USDC_ASA_ID: config.usdcAsaId,
     AGENT_MNEMONIC: config.agentMnemonic,
     SPONSOR_MNEMONIC: config.sponsorMnemonic,
   };

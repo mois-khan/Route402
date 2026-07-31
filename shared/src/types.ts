@@ -127,6 +127,19 @@ export interface SavingsSnapshot {
   paymentsRefused: number;
 }
 
+// ─── Chaos control (PRD §10.1 POST /v1/providers/:id/chaos) ──────────────────
+// Shared because three workspaces need it: providers/src/chaos.ts simulates
+// it, router/src/routes/providers.ts proxies it, the dashboard's simulation
+// controls (Phase 5) send it.
+
+export type ChaosMode = 'healthy' | 'offline' | 'slow' | 'garbage';
+
+export const CHAOS_MODES: readonly ChaosMode[] = ['healthy', 'offline', 'slow', 'garbage'] as const;
+
+export function isChaosMode(v: unknown): v is ChaosMode {
+  return typeof v === 'string' && (CHAOS_MODES as readonly string[]).includes(v);
+}
+
 // ─── WebSocket events (PRD §10.1, WS /v1/events) ─────────────────────────────
 
 export type EventType = 'decision' | 'payment' | 'call' | 'circuit' | 'stats';

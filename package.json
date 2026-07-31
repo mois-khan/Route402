@@ -24,6 +24,7 @@
     "health": "tsx agent/src/health.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p dashboard/tsconfig.json --noEmit",
     "scorer:table": "npm run scorer:table --workspace router",
+    "preflight": "tsx router/src/preflight.ts",
     "test": "npm run test --workspace router"
   },
   "devDependencies": {
