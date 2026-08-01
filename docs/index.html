@@ -41,7 +41,7 @@ const PROJECT_STATE = {
       "Fund all 5 TestNet wallets via dispenser.testnet.aws.algodev.network — agent needs ALGO + USDC, sponsor + the 3 providers need ALGO only",
       "Run npm run preflight — reports every wallet's balance/opt-in status and auto-submits the USDC opt-in for any funded-but-not-opted-in wallet",
       "Re-fire POST /v1/route and confirm a real settlement: txId present, explorer link (lora.algokit.io) resolves to a real TestNet transaction",
-      "Re-run the Phase 4 exit scenario with real funds: force Solace into garbage mode mid-request, confirm the request still succeeds via Lexicon/Nimbus and Solace's on-chain balance does not increase",
+      "Re-run the Phase 4 exit scenario with real funds: force Digest Labs into garbage mode mid-request, confirm the request still succeeds via Verbio AI/Synthetica and Digest Labs's on-chain balance does not increase",
       "Re-fire POST /v1/route/composite with real funds: confirm one atomic group settles both legs, both providers get paid, and the dashboard shows the 'Paid together' badge",
       "Then: Phase 7 (MainNet, optional stretch) or straight to Phase 8 — demo rehearsal"
     ]
@@ -489,8 +489,8 @@ footer{border-top:1px solid var(--line);padding:36px 0 60px;color:var(--faint);f
         <pre>{
   <span class="k">"result"</span>:  { "summary": "…" },
   <span class="k">"routing"</span>: {
-    "reason": "Solace selected: 40% cheaper than
-               Nimbus at comparable p95 latency.",
+    "reason": "Digest Labs selected: 40% cheaper than
+               Synthetica at comparable p95 latency.",
     "candidatesEvaluated": 3
   },
   <span class="k">"payment"</span>: {
@@ -637,7 +637,7 @@ footer{border-top:1px solid var(--line);padding:36px 0 60px;color:var(--faint);f
       </div></div>
       <div class="step"><div class="sn">3</div><div class="sb">
         <div class="st">Explain</div>
-        <div class="sd">Generate one plain sentence from the score deltas: <em>"Solace selected: 40% cheaper than Nimbus at comparable p95 latency."</em> Generated, never hand-templated.</div>
+        <div class="sd">Generate one plain sentence from the score deltas: <em>"Digest Labs selected: 40% cheaper than Synthetica at comparable p95 latency."</em> Generated, never hand-templated.</div>
       </div></div>
       <div class="step"><div class="sn">4</div><div class="sb">
         <div class="st">Handshake</div>

@@ -17,7 +17,7 @@ export type CircuitState = 'closed' | 'open' | 'half_open';
 
 export interface Provider {
   id: string; // "prov_alpha"
-  name: string; // "Lexicon Summarize"
+  name: string; // "Verbio AI"
   endpoint: string; // "http://localhost:4001/summarize"
   capabilities: string[]; // ["text.summarize"]
   advertisedPriceMicroUSDC: number; // price per call, in micro-units

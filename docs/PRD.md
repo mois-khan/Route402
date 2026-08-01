@@ -253,7 +253,7 @@ These field names are binding.
 ```ts
 interface Provider {
   id: string;                    // "prov_alpha"
-  name: string;                  // "Lexicon Summarize"
+  name: string;                  // "Verbio AI"
   endpoint: string;              // "http://localhost:4001/summarize"
   capabilities: string[];        // ["text.summarize"]
   advertisedPriceMicroUSDC: number;  // price per call, in micro-units
@@ -448,9 +448,9 @@ If the selected provider fails (timeout, error, invalid response), the router im
 
 Every decision produces one plain-English sentence. Examples:
 
-- `"Solace selected: 40% cheaper than Nimbus with comparable p95 latency."`
-- `"Nimbus selected: priority=speed, and Nimbus's p95 is 3.1x faster than Lexicon."`
-- `"Solace selected: Lexicon excluded (circuit open after 3 consecutive failures)."`
+- `"Digest Labs selected: 40% cheaper than Synthetica with comparable p95 latency."`
+- `"Synthetica selected: priority=speed, and Synthetica's p95 is 3.1x faster than Verbio AI."`
+- `"Digest Labs selected: Verbio AI excluded (circuit open after 3 consecutive failures)."`
 
 This string is generated, not templated by hand at every call site. Build one `explainDecision(decision): string` function.
 
@@ -484,8 +484,8 @@ The single endpoint an agent needs.
   "result": { "summary": "..." },
   "routing": {
     "selectedProvider": "prov_beta",
-    "selectedProviderName": "Solace Summarize",
-    "reason": "Solace selected: 40% cheaper than Nimbus with comparable p95 latency.",
+    "selectedProviderName": "Digest Labs",
+    "reason": "Digest Labs selected: 40% cheaper than Synthetica with comparable p95 latency.",
     "candidatesEvaluated": 3,
     "fallbackChain": ["prov_beta"],
     "decisionId": "dec_01H..."
@@ -676,7 +676,7 @@ Two days. Phases are sequential. Do not start a phase before the previous one ru
 
 **Phase 1 — Providers (1.5h)**
 - One Express template, instantiated three times with different config
-- Profiles: Lexicon (cheap/slow), Solace (mid/mid), Nimbus (expensive/fast)
+- Profiles: Verbio AI (cheap/slow), Digest Labs (mid/mid), Synthetica (expensive/fast)
 - Chaos modes implemented from the start
 - No x402 yet — plain HTTP with a fake price header
 - **Exit:** all three respond, chaos modes work.
@@ -743,13 +743,13 @@ Open on the dashboard, pre-seeded, numbers already large.
 
 **0:50 — One request, end to end (60s)**
 Fire a single request. Walk the decision feed: three candidates, their scores, why one won. Click through to the explorer.
-> "Three providers evaluated. Solace won on price at comparable latency. Payment constructed, settled on Algorand, finality in under three seconds — inside the HTTP request. That's a real transaction."
+> "Three providers evaluated. Digest Labs won on price at comparable latency. Payment constructed, settled on Algorand, finality in under three seconds — inside the HTTP request. That's a real transaction."
 
 **1:50 — Kill a provider (60s)**
-Fire continuous traffic. Kill Solace live.
-> "Solace just went down. Watch."
+Fire continuous traffic. Kill Digest Labs live.
+> "Digest Labs just went down. Watch."
 Failures appear, breaker trips, traffic reroutes, requests keep succeeding.
-> "No human touched that. And notice — Solace was never paid for the requests it failed. Payment on delivery, not on request."
+> "No human touched that. And notice — Digest Labs was never paid for the requests it failed. Payment on delivery, not on request."
 
 **2:50 — The Algorand argument (45s)**
 Trigger a composite request.

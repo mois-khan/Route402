@@ -36,7 +36,7 @@ const num = (v: string | undefined, fallback: number): number => {
 const SEEDS: SeedProfile[] = [
   {
     id: 'prov_alpha',
-    name: 'Lexicon Summarize',
+    name: 'Verbio AI',
     capability: 'text.summarize',
     port: num(process.env.PROVIDER_ALPHA_PORT, 4001),
     baseUrl: process.env.PROVIDER_ALPHA_URL || '',
@@ -47,7 +47,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_beta',
-    name: 'Solace Summarize',
+    name: 'Digest Labs',
     capability: 'text.summarize',
     port: num(process.env.PROVIDER_BETA_PORT, 4002),
     baseUrl: process.env.PROVIDER_BETA_URL || '',
@@ -58,7 +58,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_gamma',
-    name: 'Nimbus Summarize',
+    name: 'Synthetica',
     capability: 'text.summarize',
     port: num(process.env.PROVIDER_GAMMA_PORT, 4003),
     baseUrl: process.env.PROVIDER_GAMMA_URL || '',
@@ -69,7 +69,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_alpha_translate',
-    name: 'Lexicon Translate',
+    name: 'Lingofy',
     capability: 'text.translate',
     port: num(process.env.PROVIDER_ALPHA_PORT, 4001),
     baseUrl: process.env.PROVIDER_ALPHA_URL || '',
@@ -80,7 +80,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_beta_translate',
-    name: 'Solace Translate',
+    name: 'Polyglossia',
     capability: 'text.translate',
     port: num(process.env.PROVIDER_BETA_PORT, 4002),
     baseUrl: process.env.PROVIDER_BETA_URL || '',
@@ -91,7 +91,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_gamma_translate',
-    name: 'Nimbus Translate',
+    name: 'Transluma',
     capability: 'text.translate',
     port: num(process.env.PROVIDER_GAMMA_PORT, 4003),
     baseUrl: process.env.PROVIDER_GAMMA_URL || '',
@@ -102,7 +102,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_alpha_provision',
-    name: 'Lexicon DB',
+    name: 'Ledgerbase',
     capability: 'db.provision',
     port: num(process.env.PROVIDER_ALPHA_PORT, 4001),
     baseUrl: process.env.PROVIDER_ALPHA_URL || '',
@@ -113,7 +113,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_beta_provision',
-    name: 'Solace DB',
+    name: 'Corestack',
     capability: 'db.provision',
     port: num(process.env.PROVIDER_BETA_PORT, 4002),
     baseUrl: process.env.PROVIDER_BETA_URL || '',
@@ -124,7 +124,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_gamma_provision',
-    name: 'Nimbus DB',
+    name: 'Vaultrix',
     capability: 'db.provision',
     port: num(process.env.PROVIDER_GAMMA_PORT, 4003),
     baseUrl: process.env.PROVIDER_GAMMA_URL || '',
@@ -135,7 +135,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_alpha_cloud',
-    name: 'Lexicon Cloud',
+    name: 'Driftcloud',
     capability: 'cloud.provision',
     port: num(process.env.PROVIDER_ALPHA_PORT, 4001),
     baseUrl: process.env.PROVIDER_ALPHA_URL || '',
@@ -146,7 +146,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_beta_cloud',
-    name: 'Solace Cloud',
+    name: 'Nodeforge',
     capability: 'cloud.provision',
     port: num(process.env.PROVIDER_BETA_PORT, 4002),
     baseUrl: process.env.PROVIDER_BETA_URL || '',
@@ -157,7 +157,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_gamma_cloud',
-    name: 'Nimbus Cloud',
+    name: 'Skyhaven',
     capability: 'cloud.provision',
     port: num(process.env.PROVIDER_GAMMA_PORT, 4003),
     baseUrl: process.env.PROVIDER_GAMMA_URL || '',
@@ -168,7 +168,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_alpha_email',
-    name: 'Lexicon Email',
+    name: 'Mailtrail',
     capability: 'email.provision',
     port: num(process.env.PROVIDER_ALPHA_PORT, 4001),
     baseUrl: process.env.PROVIDER_ALPHA_URL || '',
@@ -179,7 +179,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_beta_email',
-    name: 'Solace Email',
+    name: 'Postflow',
     capability: 'email.provision',
     port: num(process.env.PROVIDER_BETA_PORT, 4002),
     baseUrl: process.env.PROVIDER_BETA_URL || '',
@@ -190,7 +190,7 @@ const SEEDS: SeedProfile[] = [
   },
   {
     id: 'prov_gamma_email',
-    name: 'Nimbus Email',
+    name: 'Relayhive',
     capability: 'email.provision',
     port: num(process.env.PROVIDER_GAMMA_PORT, 4003),
     baseUrl: process.env.PROVIDER_GAMMA_URL || '',

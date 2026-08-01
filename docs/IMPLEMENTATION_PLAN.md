@@ -108,9 +108,9 @@ route402/
 
   | id | name | price (µUSDC) | latency p50 | character |
   |---|---|---|---|---|
-  | `prov_alpha` | Lexicon Summarize | 8,000 | 1400ms | cheap, slow |
-  | `prov_beta` | Solace Summarize | 12,000 | 700ms | mid, mid |
-  | `prov_gamma` | Nimbus Summarize | 22,000 | 250ms | expensive, fast |
+  | `prov_alpha` | Verbio AI | 8,000 | 1400ms | cheap, slow |
+  | `prov_beta` | Digest Labs | 12,000 | 700ms | mid, mid |
+  | `prov_gamma` | Synthetica | 22,000 | 250ms | expensive, fast |
 
 - [x] `providers/src/server.ts` — one template, config-injected, three instances on `:4001–:4003`
 - [x] Implement `text.summarize` with realistic jitter (±25% around p50), not a fixed sleep
@@ -124,7 +124,7 @@ route402/
 - [x] `POST /_chaos` on each provider (router-side proxy at `POST /v1/providers/:id/chaos` deferred to Phase 2, once `registry.ts` has the provider id → endpoint map to proxy through)
 - [x] Price header on the response so the router has something to read pre-x402
 
-**Exit:** `curl` each provider, get a result; flip each chaos mode and observe the correct failure shape. ✅ Verified manually — healthy call ~1.6s within Lexicon's jitter band, `garbage` → 200 with empty summary, `offline` → 503, `slow` → ~6.1s past the 4s declared timeout. Solace and Nimbus boot with correct distinct profiles.
+**Exit:** `curl` each provider, get a result; flip each chaos mode and observe the correct failure shape. ✅ Verified manually — healthy call ~1.6s within Verbio AI's jitter band, `garbage` → 200 with empty summary, `offline` → 503, `slow` → ~6.1s past the 4s declared timeout. Digest Labs and Synthetica boot with correct distinct profiles.
 
 **Watch for:** `garbage` mode must return HTTP 200. A provider that fails loudly is easy. The interesting case — the one the guard exists for — is a provider that returns success with nothing in it.
 
@@ -149,7 +149,7 @@ route402/
 - [x] Test harness: `npm run scorer:table` prints the full score matrix for the three providers under all three priorities
 - [x] Unit tests for the scorer only (PRD §16 — no other test coverage)
 
-**Exit:** under `cost` Lexicon wins; under `speed` Nimbus wins; under `balanced` Solace wins. Every decision explains itself in one sentence. ✅ Verified via `npm run scorer:table` — Lexicon/Nimbus/Solace win their respective priorities, plus a circuit-open scenario proving the exclusion-reason branch. `npm test` — 14/14 scorer unit tests pass. `registry.ts`/`breaker.ts` manually verified (cold start, rolling window, breaker trip/half-open/recover, one-probe-at-a-time, SQLite persistence round-trip) via a throwaway script, since PRD §16 restricts automated coverage to the scorer.
+**Exit:** under `cost` Verbio AI wins; under `speed` Synthetica wins; under `balanced` Digest Labs wins. Every decision explains itself in one sentence. ✅ Verified via `npm run scorer:table` — Verbio AI/Synthetica/Digest Labs win their respective priorities, plus a circuit-open scenario proving the exclusion-reason branch. `npm test` — 14/14 scorer unit tests pass. `registry.ts`/`breaker.ts` manually verified (cold start, rolling window, breaker trip/half-open/recover, one-probe-at-a-time, SQLite persistence round-trip) via a throwaway script, since PRD §16 restricts automated coverage to the scorer.
 
 **Watch for:** The scorer must not import the registry, the DB, or anything async. Purity is what makes it demonstrable on stage.
 
@@ -197,7 +197,7 @@ Every `[VERIFY]` marker in the PRD resolves here. Record findings in `docs/VERIF
 
 **Goal:** a provider that does not deliver is not paid.
 
-**Status (2026-08-01): code complete, exit criterion pending the same funding blocker as Phase 3.** Structurally verified live: with Solace forced `offline` and Lexicon/Nimbus still unfunded, `POST /v1/route` correctly walked all 3 candidates in cost order, recorded a `call` + `payment` row for each, and returned the exact PRD §10.1 503 body (`{"error":"no_provider_available","attempted":["prov_alpha","prov_beta","prov_gamma"]}`). Fixed a real bug found in the process: `calls`/`payments` foreign-key to `decisions.id`, but a decision isn't final until the fallback loop ends — rows are now collected in memory and persisted together once the decision is written, not incrementally. Also found and fixed a deeper issue while building the guard: x402 settlement is gated by the middleware purely on HTTP status (`>=400` cancels, anything else pays) — a literal `200 { summary: '' }` would have been paid automatically by the protocol itself, before Route402's own guard ever ran. `providers/src/server.ts`'s `garbage` chaos mode now returns a non-2xx so that's refused at the source; the router-side guard is the independent second check for whatever a provider's own status code doesn't catch (bad JSON, missing/empty field, timeout).
+**Status (2026-08-01): code complete, exit criterion pending the same funding blocker as Phase 3.** Structurally verified live: with Digest Labs forced `offline` and Verbio AI/Synthetica still unfunded, `POST /v1/route` correctly walked all 3 candidates in cost order, recorded a `call` + `payment` row for each, and returned the exact PRD §10.1 503 body (`{"error":"no_provider_available","attempted":["prov_alpha","prov_beta","prov_gamma"]}`). Fixed a real bug found in the process: `calls`/`payments` foreign-key to `decisions.id`, but a decision isn't final until the fallback loop ends — rows are now collected in memory and persisted together once the decision is written, not incrementally. Also found and fixed a deeper issue while building the guard: x402 settlement is gated by the middleware purely on HTTP status (`>=400` cancels, anything else pays) — a literal `200 { summary: '' }` would have been paid automatically by the protocol itself, before Route402's own guard ever ran. `providers/src/server.ts`'s `garbage` chaos mode now returns a non-2xx so that's refused at the source; the router-side guard is the independent second check for whatever a provider's own status code doesn't catch (bad JSON, missing/empty field, timeout).
 
 - [x] `router/src/payment/guard.ts` — verify before settlement counts as valid (PRD §11.3):
   - [x] HTTP status 2xx
@@ -208,7 +208,7 @@ Every `[VERIFY]` marker in the PRD resolves here. Record findings in `docs/VERIF
 - [x] Fallback loop: next-best eligible candidate, **max 3 attempts**, every attempt appended to `fallbackChain`
 - [x] Error responses: 402 `no_affordable_provider`, 503 `no_provider_available`, with the exact bodies from PRD §10.1
 
-**Exit:** set Solace to `garbage` mid-request; the request still returns a good result via another provider, and Solace's earnings do not increase. **Not yet met** — needs a real successful settlement through the fallback path, same funding blocker as Phase 3. Offline-mode reroute is confirmed; garbage-mode non-payment and a genuine "succeeds via another provider" still need funded wallets to prove end to end.
+**Exit:** set Digest Labs to `garbage` mid-request; the request still returns a good result via another provider, and Digest Labs's earnings do not increase. **Not yet met** — needs a real successful settlement through the fallback path, same funding blocker as Phase 3. Offline-mode reroute is confirmed; garbage-mode non-payment and a genuine "succeeds via another provider" still need funded wallets to prove end to end.
 
 ---
 

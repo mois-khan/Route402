@@ -4,7 +4,7 @@ import 'dotenv/config';
  * The three simulated providers.
  *
  * The point of the spread is that no single one is the obvious answer:
- * Lexicon wins on cost, Nimbus wins on speed, Solace wins on balance. A router
+ * Verbio AI wins on cost, Synthetica wins on speed, Digest Labs wins on balance. A router
  * that always picks the same provider is indistinguishable from a hardcoded
  * URL, which is the thing this project exists to replace.
  */
@@ -33,7 +33,7 @@ export interface ProviderProfile {
    * PRD §10.2's example shows 30s. That is a sane production number and an
    * unwatchable demo one — a `slow` provider would stall the stage for half a
    * minute per attempt, three times over during fallback. 4s sits far above
-   * every provider's real p95 (Lexicon's is 1700ms) while keeping a failed
+   * every provider's real p95 (Verbio AI's is 1700ms) while keeping a failed
    * attempt short enough to narrate.
    */
   maxTimeoutSeconds: number;
@@ -49,7 +49,7 @@ const num = (v: string | undefined, fallback: number): number => {
 export const PROFILES: Record<string, ProviderProfile> = {
   alpha: {
     id: 'prov_alpha',
-    name: 'Lexicon Summarize',
+    name: 'Verbio AI',
     port: num(process.env.PROVIDER_ALPHA_PORT, 4001),
     capabilities: ['text.summarize'],
     path: '/summarize',
@@ -61,7 +61,7 @@ export const PROFILES: Record<string, ProviderProfile> = {
   },
   beta: {
     id: 'prov_beta',
-    name: 'Solace Summarize',
+    name: 'Digest Labs',
     port: num(process.env.PROVIDER_BETA_PORT, 4002),
     capabilities: ['text.summarize'],
     path: '/summarize',
@@ -73,7 +73,7 @@ export const PROFILES: Record<string, ProviderProfile> = {
   },
   gamma: {
     id: 'prov_gamma',
-    name: 'Nimbus Summarize',
+    name: 'Synthetica',
     port: num(process.env.PROVIDER_GAMMA_PORT, 4003),
     capabilities: ['text.summarize'],
     path: '/summarize',
@@ -114,7 +114,7 @@ export interface TranslateProfile {
 export const TRANSLATE_PROFILES: Record<string, TranslateProfile> = {
   alpha: {
     id: 'prov_alpha_translate',
-    name: 'Lexicon Translate',
+    name: 'Lingofy',
     path: '/translate',
     advertisedPriceMicroUSDC: 6_000, // cheap
     latencyP50Ms: 900, // slow
@@ -122,7 +122,7 @@ export const TRANSLATE_PROFILES: Record<string, TranslateProfile> = {
   },
   beta: {
     id: 'prov_beta_translate',
-    name: 'Solace Translate',
+    name: 'Polyglossia',
     path: '/translate',
     advertisedPriceMicroUSDC: 9_000, // mid
     latencyP50Ms: 500, // mid
@@ -130,7 +130,7 @@ export const TRANSLATE_PROFILES: Record<string, TranslateProfile> = {
   },
   gamma: {
     id: 'prov_gamma_translate',
-    name: 'Nimbus Translate',
+    name: 'Transluma',
     path: '/translate',
     advertisedPriceMicroUSDC: 15_000, // expensive
     latencyP50Ms: 180, // fast
@@ -164,7 +164,7 @@ export interface ProvisionProfile {
 export const PROVISION_PROFILES: Record<string, ProvisionProfile> = {
   alpha: {
     id: 'prov_alpha_provision',
-    name: 'Lexicon DB',
+    name: 'Ledgerbase',
     path: '/provision',
     advertisedPriceMicroUSDC: 15_000, // cheap
     latencyP50Ms: 1_200, // slow
@@ -172,7 +172,7 @@ export const PROVISION_PROFILES: Record<string, ProvisionProfile> = {
   },
   beta: {
     id: 'prov_beta_provision',
-    name: 'Solace DB',
+    name: 'Corestack',
     path: '/provision',
     advertisedPriceMicroUSDC: 22_000, // mid
     latencyP50Ms: 650, // mid
@@ -180,7 +180,7 @@ export const PROVISION_PROFILES: Record<string, ProvisionProfile> = {
   },
   gamma: {
     id: 'prov_gamma_provision',
-    name: 'Nimbus DB',
+    name: 'Vaultrix',
     path: '/provision',
     advertisedPriceMicroUSDC: 35_000, // expensive
     latencyP50Ms: 300, // fast
@@ -210,7 +210,7 @@ export interface CloudProfile {
 export const CLOUD_PROFILES: Record<string, CloudProfile> = {
   alpha: {
     id: 'prov_alpha_cloud',
-    name: 'Lexicon Cloud',
+    name: 'Driftcloud',
     path: '/cloud',
     advertisedPriceMicroUSDC: 18_000, // cheap
     latencyP50Ms: 1_300, // slow
@@ -218,7 +218,7 @@ export const CLOUD_PROFILES: Record<string, CloudProfile> = {
   },
   beta: {
     id: 'prov_beta_cloud',
-    name: 'Solace Cloud',
+    name: 'Nodeforge',
     path: '/cloud',
     advertisedPriceMicroUSDC: 26_000, // mid
     latencyP50Ms: 700, // mid
@@ -226,7 +226,7 @@ export const CLOUD_PROFILES: Record<string, CloudProfile> = {
   },
   gamma: {
     id: 'prov_gamma_cloud',
-    name: 'Nimbus Cloud',
+    name: 'Skyhaven',
     path: '/cloud',
     advertisedPriceMicroUSDC: 40_000, // expensive
     latencyP50Ms: 320, // fast
@@ -256,7 +256,7 @@ export interface EmailProfile {
 export const EMAIL_PROFILES: Record<string, EmailProfile> = {
   alpha: {
     id: 'prov_alpha_email',
-    name: 'Lexicon Email',
+    name: 'Mailtrail',
     path: '/email',
     advertisedPriceMicroUSDC: 4_000, // cheap
     latencyP50Ms: 1_000, // slow
@@ -264,7 +264,7 @@ export const EMAIL_PROFILES: Record<string, EmailProfile> = {
   },
   beta: {
     id: 'prov_beta_email',
-    name: 'Solace Email',
+    name: 'Postflow',
     path: '/email',
     advertisedPriceMicroUSDC: 6_000, // mid
     latencyP50Ms: 550, // mid
@@ -272,7 +272,7 @@ export const EMAIL_PROFILES: Record<string, EmailProfile> = {
   },
   gamma: {
     id: 'prov_gamma_email',
-    name: 'Nimbus Email',
+    name: 'Relayhive',
     path: '/email',
     advertisedPriceMicroUSDC: 10_000, // expensive
     latencyP50Ms: 220, // fast
