@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Provider, CallRecord, ChaosMode, RouterEvent } from '@route402/shared';
+import type { Provider, CallRecord, ChaosMode, RouterEvent, RouteConstraints } from '@route402/shared';
 import type { DecisionWithPriority, StatsSnapshot, CallSummary, PaymentWithCreatedAt, WalletBalances } from './types.js';
 import { createEventsClient, type ConnectionState } from './ws.js';
 
@@ -15,6 +15,8 @@ interface Store {
   latestDecisionId: string | null;
   sendChaos: (providerId: string, mode: ChaosMode) => Promise<void>;
   sendLoad: (count: number) => Promise<void>;
+  /** One real agent request — the "New agent request" flow, not simulated load. */
+  sendRequest: (capability: string, constraints: RouteConstraints, payload: Record<string, unknown>) => Promise<void>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -156,8 +158,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const sendRequest = async (capability: string, constraints: RouteConstraints, payload: Record<string, unknown>) => {
+    const res = await fetch(`${API_BASE}/v1/route`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ capability, payload, constraints, agentId: 'agent_dashboard' }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || body.error || `HTTP ${res.status}`);
+    }
+  };
+
   return (
-    <StoreContext.Provider value={{ providers, decisions, payments, calls, stats, wallets, connectionState, latestDecisionId, sendChaos, sendLoad }}>
+    <StoreContext.Provider value={{ providers, decisions, payments, calls, stats, wallets, connectionState, latestDecisionId, sendChaos, sendLoad, sendRequest }}>
       {children}
     </StoreContext.Provider>
   );

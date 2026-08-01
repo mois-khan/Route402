@@ -11,12 +11,13 @@ import { DecisionRow } from '../components/DecisionRow.js';
 import { PaymentRow } from '../components/PaymentRow.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { SimPanel } from '../components/SimPanel.js';
+import { RequestPanel } from '../components/RequestPanel.js';
 import { WalletAssertion } from '../components/WalletAssertion.js';
 import type { SparklinePoint } from '../components/Sparkline.js';
 
 /** DESIGN.md §8.1 — the projector page. Everything the demo needs, in scroll order. */
 export function Overview() {
-  const { providers, decisions, payments, calls, stats, wallets, latestDecisionId, sendChaos, sendLoad } = useStore();
+  const { providers, decisions, payments, calls, stats, wallets, latestDecisionId, sendChaos, sendLoad, sendRequest } = useStore();
 
   const latestDecision = decisions.find((d) => d.id === latestDecisionId) ?? decisions[0];
   const liveSteps = useMemo(() => (latestDecision ? narrate({ decision: latestDecision, payments }) : []), [latestDecision, payments]);
@@ -58,9 +59,11 @@ export function Overview() {
         <StatTile label="Settles in" value={stats?.avgSettlementMs ? formatMs(stats.avgSettlementMs) : '—'} sub="average" />
       </div>
 
-      <NarrationPanel key={latestDecision?.id ?? 'idle'} steps={liveSteps} live requestId={latestDecision?.requestId} />
+      <RequestPanel providers={providers} wallets={wallets} onSend={sendRequest} />
 
       <WalletAssertion wallets={wallets} />
+
+      <NarrationPanel key={latestDecision?.id ?? 'idle'} steps={liveSteps} live requestId={latestDecision?.requestId} />
 
       <section>
         <h2 className="text-ink mb-3 text-lg font-semibold">Providers</h2>

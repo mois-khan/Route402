@@ -1,6 +1,6 @@
 import express from 'express';
 import type { Request, Response } from 'express';
-import { loadProfile, loadTranslateProfile } from './profiles.js';
+import { loadProfile, loadTranslateProfile, loadProvisionProfile, loadCloudProfile, loadEmailProfile } from './profiles.js';
 import { createChaos, isChaosMode, GARBAGE_BODY } from './chaos.js';
 import { x402Gate, usdcAsaId } from './x402-gate.js';
 import { verifyCompositeProof } from './compositeProof.js';
@@ -21,6 +21,9 @@ import { verifyCompositeProof } from './compositeProof.js';
 const key = process.argv[2];
 const profile = loadProfile(key);
 const translateProfile = loadTranslateProfile(key);
+const provisionProfile = loadProvisionProfile(key);
+const cloudProfile = loadCloudProfile(key);
+const emailProfile = loadEmailProfile(key);
 const chaos = createChaos();
 const app = express();
 
@@ -38,6 +41,46 @@ function summarize(text: string, maxWords: number): string {
 /** Naive stand-in for a real translator, same reasoning as summarize(). */
 function translate(text: string): string {
   return `[translated] ${text.trim()}`;
+}
+
+/** Naive stand-in for real database provisioning, same reasoning as summarize(). */
+function provisionDatabase(id: string, engine: string): { host: string; port: number; username: string; password: string; database: string; connectionString: string } {
+  const host = `db-${id.replace(/^prov_/, '').replace(/_provision$/, '')}.route402.demo`;
+  const port = engine === 'mysql' ? 3306 : 5432;
+  const username = 'agent';
+  const password = Math.random().toString(36).slice(2, 12);
+  const database = engine;
+  return {
+    host,
+    port,
+    username,
+    password,
+    database,
+    connectionString: `${engine}://${username}:${password}@${host}:${port}/${database}`,
+  };
+}
+
+/** Naive stand-in for real cloud VM provisioning, same reasoning as summarize(). */
+function provisionServer(id: string, region: string): { instanceId: string; ipAddress: string; region: string; sshUser: string; sshKeyFingerprint: string } {
+  const shortId = id.replace(/^prov_/, '').replace(/_cloud$/, '');
+  return {
+    instanceId: `i-${shortId}-${Math.random().toString(36).slice(2, 10)}`,
+    ipAddress: `203.0.113.${1 + Math.floor(Math.random() * 253)}`,
+    region,
+    sshUser: 'agent',
+    sshKeyFingerprint: Math.random().toString(36).slice(2, 18),
+  };
+}
+
+/** Naive stand-in for real email-sending provisioning, same reasoning as summarize(). */
+function provisionEmail(id: string): { smtpHost: string; smtpPort: number; username: string; apiKey: string } {
+  const shortId = id.replace(/^prov_/, '').replace(/_email$/, '');
+  return {
+    smtpHost: `smtp-${shortId}.route402.demo`,
+    smtpPort: 587,
+    username: 'agent',
+    apiKey: Math.random().toString(36).slice(2, 20),
+  };
 }
 
 async function handleSummarize(req: Request, res: Response): Promise<void> {
@@ -87,6 +130,55 @@ async function handleTranslate(req: Request, res: Response): Promise<void> {
   res.status(200).json({ translation: translate(text) });
 }
 
+async function handleProvision(req: Request, res: Response): Promise<void> {
+  const timing = { latencyP50Ms: provisionProfile.latencyP50Ms, latencyP95Ms: provisionProfile.latencyP95Ms, maxTimeoutSeconds: profile.maxTimeoutSeconds };
+  const delayMs = chaos.delayMs(timing);
+  await sleep(delayMs);
+
+  res.setHeader('X-Price-MicroUSDC', String(provisionProfile.advertisedPriceMicroUSDC));
+
+  if (chaos.mode === 'garbage') {
+    res.status(502).json({ error: 'empty_result', message: `${provisionProfile.id} produced no usable output`, connectionString: '' });
+    return;
+  }
+
+  const engine = typeof req.body?.engine === 'string' && req.body.engine.trim() ? req.body.engine.trim() : 'postgres';
+
+  res.status(200).json({ provider: provisionProfile.name, ...provisionDatabase(provisionProfile.id, engine) });
+}
+
+async function handleCloud(req: Request, res: Response): Promise<void> {
+  const timing = { latencyP50Ms: cloudProfile.latencyP50Ms, latencyP95Ms: cloudProfile.latencyP95Ms, maxTimeoutSeconds: profile.maxTimeoutSeconds };
+  const delayMs = chaos.delayMs(timing);
+  await sleep(delayMs);
+
+  res.setHeader('X-Price-MicroUSDC', String(cloudProfile.advertisedPriceMicroUSDC));
+
+  if (chaos.mode === 'garbage') {
+    res.status(502).json({ error: 'empty_result', message: `${cloudProfile.id} produced no usable output`, instanceId: '' });
+    return;
+  }
+
+  const region = typeof req.body?.region === 'string' && req.body.region.trim() ? req.body.region.trim() : 'us-east-1';
+
+  res.status(200).json({ provider: cloudProfile.name, ...provisionServer(cloudProfile.id, region) });
+}
+
+async function handleEmail(req: Request, res: Response): Promise<void> {
+  const timing = { latencyP50Ms: emailProfile.latencyP50Ms, latencyP95Ms: emailProfile.latencyP95Ms, maxTimeoutSeconds: profile.maxTimeoutSeconds };
+  const delayMs = chaos.delayMs(timing);
+  await sleep(delayMs);
+
+  res.setHeader('X-Price-MicroUSDC', String(emailProfile.advertisedPriceMicroUSDC));
+
+  if (chaos.mode === 'garbage') {
+    res.status(502).json({ error: 'empty_result', message: `${emailProfile.id} produced no usable output`, apiKey: '' });
+    return;
+  }
+
+  res.status(200).json({ provider: emailProfile.name, ...provisionEmail(emailProfile.id) });
+}
+
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -126,6 +218,9 @@ app.get('/_chaos', (_req, res) => {
 const CAPABILITY_PATHS: Record<string, { payTo: string; advertisedPriceMicroUSDC: number; handler: (req: Request, res: Response) => Promise<void> }> = {
   [profile.path]: { payTo: profile.walletAddress, advertisedPriceMicroUSDC: profile.advertisedPriceMicroUSDC, handler: handleSummarize },
   [translateProfile.path]: { payTo: profile.walletAddress, advertisedPriceMicroUSDC: translateProfile.advertisedPriceMicroUSDC, handler: handleTranslate },
+  [provisionProfile.path]: { payTo: profile.walletAddress, advertisedPriceMicroUSDC: provisionProfile.advertisedPriceMicroUSDC, handler: handleProvision },
+  [cloudProfile.path]: { payTo: profile.walletAddress, advertisedPriceMicroUSDC: cloudProfile.advertisedPriceMicroUSDC, handler: handleCloud },
+  [emailProfile.path]: { payTo: profile.walletAddress, advertisedPriceMicroUSDC: emailProfile.advertisedPriceMicroUSDC, handler: handleEmail },
 };
 
 app.use((req, res, next) => {
@@ -177,16 +272,47 @@ app.use(
       walletAddress: profile.walletAddress,
       maxTimeoutSeconds: profile.maxTimeoutSeconds,
     },
+    {
+      path: provisionProfile.path,
+      capability: 'db.provision',
+      name: provisionProfile.name,
+      advertisedPriceMicroUSDC: provisionProfile.advertisedPriceMicroUSDC,
+      // Same wallet again — third capability, same entity.
+      walletAddress: profile.walletAddress,
+      maxTimeoutSeconds: profile.maxTimeoutSeconds,
+    },
+    {
+      path: cloudProfile.path,
+      capability: 'cloud.provision',
+      name: cloudProfile.name,
+      advertisedPriceMicroUSDC: cloudProfile.advertisedPriceMicroUSDC,
+      walletAddress: profile.walletAddress,
+      maxTimeoutSeconds: profile.maxTimeoutSeconds,
+    },
+    {
+      path: emailProfile.path,
+      capability: 'email.provision',
+      name: emailProfile.name,
+      advertisedPriceMicroUSDC: emailProfile.advertisedPriceMicroUSDC,
+      walletAddress: profile.walletAddress,
+      maxTimeoutSeconds: profile.maxTimeoutSeconds,
+    },
   ])
 );
 
 app.post(profile.path, handleSummarize);
 app.post(translateProfile.path, handleTranslate);
+app.post(provisionProfile.path, handleProvision);
+app.post(cloudProfile.path, handleCloud);
+app.post(emailProfile.path, handleEmail);
 
 app.listen(profile.port, () => {
   console.log(
     `[${profile.id}] ${profile.name} listening on :${profile.port}` +
       ` · ${profile.advertisedPriceMicroUSDC} µUSDC · ~${profile.latencyP50Ms}ms p50` +
-      ` · ${translateProfile.name} ${translateProfile.advertisedPriceMicroUSDC} µUSDC · ~${translateProfile.latencyP50Ms}ms p50`
+      ` · ${translateProfile.name} ${translateProfile.advertisedPriceMicroUSDC} µUSDC · ~${translateProfile.latencyP50Ms}ms p50` +
+      ` · ${provisionProfile.name} ${provisionProfile.advertisedPriceMicroUSDC} µUSDC · ~${provisionProfile.latencyP50Ms}ms p50` +
+      ` · ${cloudProfile.name} ${cloudProfile.advertisedPriceMicroUSDC} µUSDC · ~${cloudProfile.latencyP50Ms}ms p50` +
+      ` · ${emailProfile.name} ${emailProfile.advertisedPriceMicroUSDC} µUSDC · ~${emailProfile.latencyP50Ms}ms p50`
   );
 });

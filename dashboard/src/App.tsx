@@ -5,6 +5,7 @@ import { Overview } from './pages/Overview.js';
 import { Providers } from './pages/Providers.js';
 import { Payments } from './pages/Payments.js';
 import { HowItWorks } from './pages/HowItWorks.js';
+import { FundWallets } from './pages/FundWallets.js';
 
 /** DESIGN.md §5 — top bar, 56px, sticky, hairline bottom border. Text links only. */
 function Nav() {
@@ -49,6 +50,8 @@ export function App() {
               <Route path="/providers" element={<Providers />} />
               <Route path="/payments" element={<Payments />} />
               <Route path="/how" element={<HowItWorks />} />
+              {/* Operator setup tool, not in Nav — see FundWallets.tsx. */}
+              <Route path="/fund" element={<FundWallets />} />
             </Routes>
           </main>
         </div>

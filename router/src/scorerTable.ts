@@ -3,8 +3,8 @@ import { score, selectWinner } from './scorer.js';
 import { explainDecision } from './explain.js';
 
 /**
- * Phase 2 exit check: "under cost Alpha wins; under speed Gamma wins; under
- * balanced Beta wins. Every decision explains itself in one sentence."
+ * Phase 2 exit check: "under cost Lexicon wins; under speed Nimbus wins; under
+ * balanced Solace wins. Every decision explains itself in one sentence."
  *
  * Deliberately does not touch the registry or the ledger — this prints the
  * scorer's own arithmetic against known, hand-built candidates so the demo
@@ -33,9 +33,9 @@ function provider(overrides: Partial<Provider> & Pick<Provider, 'id' | 'name' | 
 
 // Cold-start economics straight from providers/src/profiles.ts.
 const BASE_CANDIDATES: Provider[] = [
-  provider({ id: 'prov_alpha', name: 'Alpha Summarize', advertisedPriceMicroUSDC: 8_000, latencyP95Ms: 1_700 }),
-  provider({ id: 'prov_beta', name: 'Beta Summarize', advertisedPriceMicroUSDC: 12_000, latencyP95Ms: 850 }),
-  provider({ id: 'prov_gamma', name: 'Gamma Summarize', advertisedPriceMicroUSDC: 22_000, latencyP95Ms: 300 }),
+  provider({ id: 'prov_alpha', name: 'Lexicon Summarize', advertisedPriceMicroUSDC: 8_000, latencyP95Ms: 1_700 }),
+  provider({ id: 'prov_beta', name: 'Solace Summarize', advertisedPriceMicroUSDC: 12_000, latencyP95Ms: 850 }),
+  provider({ id: 'prov_gamma', name: 'Nimbus Summarize', advertisedPriceMicroUSDC: 22_000, latencyP95Ms: 300 }),
 ];
 
 const money = (n: number) => `${n.toLocaleString()}µ`;
@@ -81,9 +81,9 @@ printTable('speed', BASE_CANDIDATES);
 printTable('balanced', BASE_CANDIDATES);
 
 // Demonstrates PRD §9.8's third reason shape: the natural winner (cheapest
-// Alpha) tripped its breaker, so Beta wins instead — and the reason leads
+// Lexicon) tripped its breaker, so Solace wins instead — and the reason leads
 // with the exclusion, not a runner-up comparison.
-console.log('\n── scenario: Alpha circuit open (3 consecutive failures) ──');
+console.log('\n── scenario: Lexicon circuit open (3 consecutive failures) ──');
 const alphaDown = BASE_CANDIDATES.map((c) =>
   c.id === 'prov_alpha' ? { ...c, circuitState: 'open' as const, consecutiveFailures: 3, circuitOpenedAt: Date.now() } : c
 );

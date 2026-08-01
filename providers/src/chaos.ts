@@ -31,8 +31,8 @@ export function jitteredLatencyMs(timing: CapabilityTiming): number {
  * `slow` latency.
  *
  * The mode only proves something if the response actually misses the declared
- * deadline. 3× p95 is the intent, and it is enough for Alpha (5100ms vs a 4s
- * timeout) — but Gamma's 3× p95 is 900ms, comfortably *inside* the timeout, so
+ * deadline. 3× p95 is the intent, and it is enough for Lexicon (5100ms vs a 4s
+ * timeout) — but Nimbus's 3× p95 is 900ms, comfortably *inside* the timeout, so
  * on its own the mode would be indistinguishable from a healthy call. The
  * floor is what guarantees every provider genuinely overruns.
  */

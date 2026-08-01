@@ -16,6 +16,9 @@
 const EXPECTED_FIELD: Record<string, string> = {
   'text.summarize': 'summary',
   'text.translate': 'translation',
+  'db.provision': 'connectionString',
+  'cloud.provision': 'instanceId',
+  'email.provision': 'apiKey',
 };
 
 export interface DeliveryCheckInput {

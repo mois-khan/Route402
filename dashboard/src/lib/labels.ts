@@ -9,6 +9,9 @@ import type { CircuitState, PaymentStatus, Priority } from '@route402/shared';
 const CAPABILITY_LABELS: Record<string, string> = {
   'text.summarize': 'Summarize text',
   'text.translate': 'Translate text',
+  'db.provision': 'Provision database',
+  'cloud.provision': 'Provision cloud server',
+  'email.provision': 'Provision email service',
 };
 
 export function capabilityLabel(capability: string): string {
